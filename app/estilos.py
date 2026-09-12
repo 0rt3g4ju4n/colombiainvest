@@ -215,45 +215,48 @@ CSS = f"""
       var(--azul-profundo) 0 34%, var(--azul-gov) 34% 67%, var(--azul-claro) 67% 100%);
   }}
   /* ---------- navegacion superior ----------
-     Control segmentado presentado como barra de pestanas: sin recuadro ni
-     relleno, con la seccion activa marcada por subrayado azul. Antes era un
-     radio al que habia que esconderle el circulo con CSS apuntando a un hijo
-     interno del widget, un parche fragil. */
-  .st-key-cinav [data-baseweb="button-group"] {{
+     Se estila por el data-testid del propio boton y no por la clase del
+     contenedor (st-key-cinav). Esa clase depende de la version de Streamlit
+     y si falta, el control aparece con su aspecto por defecto: recuadros
+     con borde en lugar de pestanas. El testid del boton es estable y es el
+     unico control segmentado de la aplicacion. */
+  [data-testid="stButtonGroup"] {{
     gap: 2px; flex-wrap: wrap; margin-bottom: -2px;
     background: transparent !important; border: none !important;
     box-shadow: none !important; padding: 0 !important;
   }}
-  .st-key-cinav [data-baseweb="button-group"] button {{
+  [data-testid="stButtonGroup"] [data-baseweb="button-group"] {{
+    gap: 2px; background: transparent !important; border: none !important;
+  }}
+  button[data-testid="stBaseButton-segmented_control"],
+  button[data-testid="stBaseButton-segmented_controlActive"] {{
     background: transparent !important;
     border: none !important;
     border-bottom: 4px solid transparent !important;
     border-radius: 0 !important;
     padding: 17px 28px 18px 28px !important;
-    /* Streamlit fija el alto del boton y recorta lo que sobra, de modo que
-       el relleno vertical no surtia efecto. Se libera el alto. */
+    /* Streamlit fija el alto del boton y recorta con overflow hidden, de
+       modo que el relleno vertical no surtia efecto. Se libera el alto. */
     height: auto !important; min-height: 0 !important;
     overflow: visible !important;
     color: var(--gris-texto) !important;
     box-shadow: none !important;
     transition: all .12s ease;
   }}
-  .st-key-cinav button p {{
+  button[data-testid="stBaseButton-segmented_control"] p,
+  button[data-testid="stBaseButton-segmented_controlActive"] p {{
     font-size: 1.12rem !important; font-weight: 600 !important;
     color: inherit !important; margin: 0 !important;
   }}
-  .st-key-cinav button:hover {{
+  button[data-testid="stBaseButton-segmented_control"]:hover {{
     background: rgba(11,78,200,.06) !important;
     color: var(--azul-gov) !important;
   }}
-  /* Streamlit marca la opcion activa con kind="segmented_controlActive".
-     No usa aria-checked ni aria-pressed: se verifico en el navegador. */
-  .st-key-cinav button[kind="segmented_controlActive"] {{
+  button[data-testid="stBaseButton-segmented_controlActive"] {{
     color: var(--azul-gov) !important;
     border-bottom-color: var(--azul-gov) !important;
-    background: transparent !important;
   }}
-  .st-key-cinav button[kind="segmented_controlActive"] p {{
+  button[data-testid="stBaseButton-segmented_controlActive"] p {{
     color: var(--azul-gov) !important; font-weight: 700 !important;
   }}
 

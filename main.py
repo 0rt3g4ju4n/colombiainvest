@@ -168,7 +168,12 @@ def main() -> int:
 
     print("ColombiaInvest")
     print("Trabajo de grado, Maestria en Ciencia de Datos, Universidad EAN")
-    print(f"Python {sys.version.split()[0]} | {RAIZ}")
+    print(f"Python    {sys.version.split()[0]}")
+    # Se imprime el interprete porque Visual Studio Code puede estar usando
+    # uno distinto al de la consola, con otra version de Streamlit. Eso
+    # explica diferencias de apariencia entre una ejecucion y otra.
+    print(f"Ejecutable {sys.executable}")
+    print(f"Proyecto   {RAIZ}")
 
     if sys.version_info < (3, 10):
         aviso("Se requiere Python 3.10 o superior. "
@@ -180,6 +185,14 @@ def main() -> int:
 
     if not verificar_dependencias(instalar=not args.sin_instalar):
         return 1
+
+    import streamlit as _st
+    print(f"Streamlit  {_st.__version__}")
+    if tuple(int(x) for x in _st.__version__.split(".")[:2]) < (1, 40):
+        aviso(f"Streamlit {_st.__version__} es anterior a 1.40 y la barra de "
+              "navegacion no se vera como pestanas.\n"
+              f"Actualice con: {Path(sys.executable).name} "
+              "-m pip install -U streamlit")
 
     try:
         preparar_datos(args.reconstruir)
