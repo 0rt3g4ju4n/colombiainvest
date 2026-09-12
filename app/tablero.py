@@ -40,7 +40,14 @@ st.set_page_config(page_title="ColombiaInvest", page_icon="CI", layout="wide")
 
 @st.cache_data
 def cargar_datos() -> pd.DataFrame:
-    ruta = DIR_PROCESADOS / "proyectos_evaluables.parquet"
+    """Prefiere el dataset enriquecido con documentos municipales si existe.
+
+    El enriquecimiento es asimetrico (solo Cajica 2024), por eso solo alimenta
+    la ficha del proyecto y nunca el score.
+    """
+    enriquecido = DIR_PROCESADOS / "proyectos_enriquecidos.parquet"
+    base = DIR_PROCESADOS / "proyectos_evaluables.parquet"
+    ruta = enriquecido if enriquecido.exists() else base
     if not ruta.exists():
         st.error(
             "No existe el dataset procesado. Ejecute primero:\n\n"
@@ -48,6 +55,19 @@ def cargar_datos() -> pd.DataFrame:
         )
         st.stop()
     return pd.read_parquet(ruta)
+
+
+@st.cache_data
+def cargar_contexto_municipal() -> pd.DataFrame | None:
+    """Avance por sector del informe de gestion de Cajica 2024."""
+    ruta = DIR_PROCESADOS / "informe_gestion_cajica_2024.json"
+    if not ruta.exists():
+        return None
+    import json
+
+    with open(ruta, encoding="utf-8") as f:
+        datos = json.load(f)
+    return pd.DataFrame(datos["sectores"])
 
 
 @st.cache_resource
@@ -150,17 +170,22 @@ c3.metric("Score maximo", f"{vista['score'].max():.1f}" if len(vista) else "n/a"
 valor_total = vista["valor_vigente_total"].sum() / 1e9 if len(vista) else 0
 c4.metric("Valor vigente", f"${valor_total:,.1f} mm")
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Ranking", "Comparar proyectos", "Perfil por dimension", "Sensibilidad"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Ranking", "Comparar proyectos", "Perfil por dimension", "Sensibilidad",
+     "Contexto municipal"]
 )
 
 # --- Ranking ---------------------------------------------------------------
 with tab1:
     cols = ["ranking", "bpin", "municipio", "sector", "score"] + [f"p_{d}" for d in DIMENSIONES]
-    tabla = vista[cols + ["nombreproyecto", "valor_vigente_total"]].copy()
+    extra = ["nombreproyecto", "valor_vigente_total"]
+    if "responsable_pdm" in vista.columns:
+        extra.append("responsable_pdm")
+    tabla = vista[cols + extra].copy()
     tabla = tabla.rename(columns={**{f"p_{d}": ETIQUETAS[d] for d in DIMENSIONES},
                                   "nombreproyecto": "proyecto",
-                                  "valor_vigente_total": "valor vigente"})
+                                  "valor_vigente_total": "valor vigente",
+                                  "responsable_pdm": "dependencia responsable"})
     st.dataframe(
         tabla, hide_index=True, use_container_width=True, height=520,
         column_config={
@@ -249,6 +274,56 @@ with tab4:
     )
     for _, r in metricas.iterrows():
         st.caption(f"**{r['esquema']}**: {r['descripcion']}")
+
+# --- Contexto municipal ----------------------------------------------------
+with tab5:
+    st.subheader("Contexto del Plan de Desarrollo, Cajica 2024")
+    st.caption(
+        "Fuente: Informe de Gestion 2024 del municipio de Cajica. Esta "
+        "informacion NO alimenta el score: solo existe para Cajica y solo "
+        "para 2024, de modo que incluirla premiaria a unos proyectos por "
+        "disponibilidad documental y no por merito. Se muestra como contexto."
+    )
+    ctx = cargar_contexto_municipal()
+    if ctx is None:
+        st.info("Ejecute `python scripts/04_documentos.py` para generar este contexto.")
+    else:
+        st.markdown(
+            "**Brecha entre avance fisico y ejecucion presupuestal, por sector.** "
+            "Es el fenomeno que el anteproyecto describe con la cifra agregada "
+            "de 92,5 % contra 58,1 %, aqui desagregado en 18 sectores."
+        )
+        ctx_v = ctx.sort_values("brecha_sector", ascending=False)
+        st.dataframe(
+            ctx_v[["sector_informe", "avance_fisico_sector",
+                   "ejecucion_presupuestal_sector", "brecha_sector",
+                   "recursos_programados", "recursos_ejecutados"]].rename(columns={
+                "sector_informe": "sector",
+                "avance_fisico_sector": "avance fisico %",
+                "ejecucion_presupuestal_sector": "ejecucion presupuestal %",
+                "brecha_sector": "brecha (puntos)",
+                "recursos_programados": "programado",
+                "recursos_ejecutados": "ejecutado",
+            }),
+            hide_index=True, use_container_width=True, height=460,
+            column_config={
+                "programado": st.column_config.NumberColumn(format="$ %.0f"),
+                "ejecutado": st.column_config.NumberColumn(format="$ %.0f"),
+            },
+        )
+        st.bar_chart(
+            ctx_v.set_index("sector_informe")[
+                ["avance_fisico_sector", "ejecucion_presupuestal_sector"]
+            ], height=380, stack=False,
+        )
+        peor = ctx_v.iloc[0]
+        st.warning(
+            f"Sector con mayor brecha: **{peor['sector_informe']}**, con "
+            f"{peor['avance_fisico_sector']:.1f} % de avance fisico frente a "
+            f"{peor['ejecucion_presupuestal_sector']:.1f} % de ejecucion "
+            "presupuestal. Es justamente el tipo de senal que ninguna "
+            "plataforma publica interpreta hoy."
+        )
 
 st.divider()
 st.caption(

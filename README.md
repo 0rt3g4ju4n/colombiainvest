@@ -47,6 +47,7 @@ pip install -r requirements.txt
 python scripts/01_ingesta.py        # descarga el SUIFP (agregue --secop si lo necesita)
 python scripts/02_dataset.py        # construye el dataset y diagnostica variables
 python scripts/03_score.py          # califica y corre el analisis de sensibilidad
+python scripts/04_documentos.py     # procesa los PDF municipales (opcional)
 streamlit run app/tablero.py        # prototipo
 pytest tests/ -q                    # pruebas
 ```
@@ -111,6 +112,36 @@ configurable.
 
 Fuera: integracion automatica en tiempo real, pipeline de actualizacion,
 autenticacion, despliegue en produccion y escalamiento a otros municipios.
+
+## Documentos municipales
+
+`scripts/04_documentos.py` procesa dos PDF entregados por la alcaldia de
+Cajica y produce enriquecimiento de ficha y contexto para el prototipo.
+
+**Estas fuentes no alimentan el score.** Cubren 79 de los 491 proyectos
+evaluables (16,1 %) y ninguno de los 221 de Chia. Si se usaran como
+variables, un subconjunto quedaria calificado con informacion que el resto
+no tiene, y el ranking premiaria la disponibilidad documental en lugar del
+merito del proyecto.
+
+| Documento | Estado | Uso |
+|---|---|---|
+| Proyectos de inversion PMD Cajica | 91 proyectos, todos ya en el SUIFP | ficha: dependencia responsable, dimension, programa |
+| Informe de Gestion Cajica 2024 | 18 sectores con avance y ejecucion | contexto municipal en el prototipo |
+| PDM 2024 (418 paginas) | escaneado, sin texto extraible | requiere OCR, no procesado |
+
+Aporte principal: la cifra agregada de 92,5 % de avance fisico contra 58,1 %
+de ejecucion presupuestal queda **desagregada en 18 sectores**. El caso
+extremo es Minas y Energia, con 88,8 % de avance fisico y 0 % de ejecucion
+presupuestal.
+
+### Nota sobre el contraste entre fuentes
+
+El SUIFP reporta avance acumulado del proyecto sobre su horizonte; el
+informe municipal reporta avance de la vigencia 2024. No son comparables de
+forma directa. Contra la base temporal correcta, que es el avance del
+cuatrienio que el propio informe reporta en 22,4 %, el SUIFP arroja 31,0 %
+para Cajica: una diferencia de 8,6 puntos, coherente entre fuentes.
 
 ## Limitaciones declaradas
 

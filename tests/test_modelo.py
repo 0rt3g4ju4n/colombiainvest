@@ -226,3 +226,23 @@ def test_mas_ruido_produce_menos_estabilidad(datos_sinteticos, cfg) -> None:
     alto, _ = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=200,
                                       ruido=0.60, semilla=SEMILLA)
     assert bajo["spearman_medio"].iat[0] > alto["spearman_medio"].iat[0]
+
+
+# ---------------------------------------------------------------------------
+# documentos municipales
+# ---------------------------------------------------------------------------
+def test_porcentaje_acepta_ambos_separadores() -> None:
+    """El informe de gestion escribe 92,5% en unos sectores y 86.7% en otros.
+    Tratar el punto siempre como separador de miles convertia 86.7 en 867."""
+    from colombiainvest.ingesta.documentos import _pct
+    assert _pct("92,5") == 92.5
+    assert _pct("86.7") == 86.7
+    assert _pct("100") == 100.0
+    assert _pct("8.8") == 8.8
+    assert _pct("1.234") == 1234.0
+
+
+def test_monto_limpia_separadores() -> None:
+    from colombiainvest.ingesta.documentos import _monto
+    assert _monto("$5.875.694.415") == 5875694415.0
+    assert _monto("$ 0") == 0.0
