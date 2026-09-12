@@ -1,0 +1,244 @@
+# Parametros del modelo de calificacion compuesta.
+# Los pesos NUNCA van incrustados en el codigo. Este archivo es la unica
+# fuente de verdad y es el insumo que se lleva a las entrevistas con expertos.
+
+version: "0.1.0-partida"
+fecha: "2026-09-11"
+origen_pesos: "juicio experto del equipo, pendiente de validacion con expertos"
+
+# ---------------------------------------------------------------------------
+# ESQUEMA BASE. Es el punto de partida, no el resultado final.
+# ---------------------------------------------------------------------------
+esquema_base:
+  viabilidad_financiera: 0.25
+  madurez_ejecucion:     0.20
+  impacto_social:        0.25
+  gobernanza:            0.20
+  atractivo_inversor:    0.10
+
+# ---------------------------------------------------------------------------
+# ESQUEMAS ALTERNATIVOS para el analisis de sensibilidad.
+# ---------------------------------------------------------------------------
+esquemas_alternativos:
+  pesos_iguales:
+    descripcion: "Control neutro. Cada dimension pesa 1/5."
+    viabilidad_financiera: 0.20
+    madurez_ejecucion:     0.20
+    impacto_social:        0.20
+    gobernanza:            0.20
+    atractivo_inversor:    0.20
+
+  enfasis_financiero:
+    descripcion: "Inversionista institucional. Prioriza solvencia y ejecucion."
+    viabilidad_financiera: 0.40
+    madurez_ejecucion:     0.25
+    impacto_social:        0.10
+    gobernanza:            0.20
+    atractivo_inversor:    0.05
+
+  enfasis_social:
+    descripcion: "Fondo de impacto. Prioriza alcance poblacional."
+    viabilidad_financiera: 0.15
+    madurez_ejecucion:     0.15
+    impacto_social:        0.45
+    gobernanza:            0.20
+    atractivo_inversor:    0.05
+
+  enfasis_gobernanza:
+    descripcion: "Cooperacion internacional. Prioriza trazabilidad y control."
+    viabilidad_financiera: 0.20
+    madurez_ejecucion:     0.15
+    impacto_social:        0.20
+    gobernanza:            0.40
+    atractivo_inversor:    0.05
+
+# ---------------------------------------------------------------------------
+# PERFILES DE INVERSIONISTA (decision 5, disenada pero no comprometida).
+# El codigo los soporta; activarlos es una decision del grupo.
+# ---------------------------------------------------------------------------
+perfiles_inversionista:
+  habilitado: false
+  perfiles:
+    institucional:
+      usa_esquema: enfasis_financiero
+    fondo_impacto:
+      usa_esquema: enfasis_social
+    cooperacion:
+      usa_esquema: enfasis_gobernanza
+    generalista:
+      usa_esquema: esquema_base
+
+# ---------------------------------------------------------------------------
+# PESOS INTRA DIMENSION. Cada dimension agrega sus variables normalizadas.
+# Los pesos de cada bloque deben sumar 1.0 (el codigo lo valida).
+# sentido: 1 = mas es mejor, -1 = mas es peor.
+# ---------------------------------------------------------------------------
+variables:
+  viabilidad_financiera:
+    ratio_obligacion:
+      peso: 0.30
+      sentido: 1
+    ratio_pago:
+      peso: 0.20
+      sentido: 1
+    continuidad_presupuestal:
+      peso: 0.20
+      sentido: 1
+    diversificacion_fuentes:
+      peso: 0.15
+      sentido: 1
+    brecha_fisico_financiero:
+      peso: 0.15
+      sentido: -1
+
+  madurez_ejecucion:
+    avance_fisico:
+      peso: 0.40
+      sentido: 1
+    estado_proyecto:
+      peso: 0.25
+      sentido: 1
+    vigencias_ejecutadas:
+      peso: 0.20
+      sentido: 1
+    estabilidad_apropiacion:
+      peso: 0.15
+      sentido: -1
+
+  impacto_social:
+    # VERIFICADO 2026-09-11: DNP-proyectos_datos_basicos (cf9k-55fw) SI trae
+    # totalbeneficiario diligenciado en el 100% de los 643 proyectos
+    # (mediana 70.749). La tabla iuc2-3r6h lo trae en cero, esa fue la
+    # confusion inicial. La dimension deja de ser proxy puro.
+    # LIMITACION: 108 proyectos declaran mas beneficiarios que habitantes
+    # del municipio. Es cifra declarada en la MGA, no verificada. Por eso
+    # se usa como cobertura poblacional relativa con tope, no como conteo.
+    beneficiarios_directos:
+      peso: 0.40
+      sentido: 1
+    prioridad_sectorial:
+      peso: 0.35
+      sentido: 1
+    inversion_relativa:
+      peso: 0.25
+      sentido: 1
+
+  gobernanza:
+    # CORRECCION 2026-09-11: 'presencia_cruzada' se elimino porque resulto
+    # constante (los 643 proyectos aparecen en las cuatro tablas del SUIFP),
+    # es decir, peso decorativo sin capacidad de discriminar. Se sustituye
+    # por 'cobertura_reporte', que mide si el proyecto reporta apropiacion a
+    # lo largo de su horizonte declarado o solo en vigencias sueltas.
+    completitud_ficha:
+      peso: 0.25
+      sentido: 1
+    cobertura_reporte:
+      peso: 0.25
+      sentido: 1
+    reporta_seguimiento:
+      peso: 0.30
+      sentido: 1
+    consistencia_financiera:
+      peso: 0.20
+      sentido: 1
+
+  atractivo_inversor:
+    escala_proyecto:
+      peso: 0.40
+      sentido: 1
+    sector_financiable:
+      peso: 0.35
+      sentido: 1
+    cofinanciacion_externa:
+      peso: 0.25
+      sentido: 1
+
+# ---------------------------------------------------------------------------
+# NORMALIZACION. Decision abierta 2 del prompt, parametrizada para comparar.
+# Justificacion empirica: se verificaron 13 contratos por encima de un billon
+# de pesos en SECOP (maximo 2.582 billones, mediana 24,6 millones). Min-max
+# crudo es inviable con esa cola. Por defecto se winsoriza antes de escalar.
+# ---------------------------------------------------------------------------
+normalizacion:
+  metodo: "minmax"
+  winsorizar: true
+  percentil_inferior: 0.01
+  percentil_superior: 0.99
+  log_montos: true
+  imputacion_faltantes: "mediana"
+
+# ---------------------------------------------------------------------------
+# MAPEOS DE JUICIO EXPERTO. Se llevan a las entrevistas junto con los pesos.
+# ---------------------------------------------------------------------------
+mapeos:
+  prioridad_sectorial:
+    "Salud Y Proteccion Social": 1.00
+    "Educacion": 1.00
+    "Inclusion Social Y Reconciliacion": 0.95
+    "Vivienda, Ciudad Y Territorio": 0.90
+    "Agua Potable Y Saneamiento Basico": 0.90
+    "Agricultura Y Desarrollo Rural": 0.70
+    "Ambiente Y Desarrollo Sostenible": 0.70
+    "Transporte": 0.60
+    "Deporte Y Recreacion": 0.55
+    "Cultura": 0.55
+    "Trabajo": 0.55
+    "Justicia Y Del Derecho": 0.50
+    "Ciencia, Tecnologia E Innovacion": 0.45
+    "Comercio, Industria Y Turismo": 0.40
+    "Tecnologias De La Informacion Y Las Comunicaciones": 0.40
+    "Minas Y Energia": 0.35
+    "Gobierno Territorial": 0.30
+    "_defecto": 0.40
+
+  sector_financiable:
+    "Transporte": 1.00
+    "Ambiente Y Desarrollo Sostenible": 1.00
+    "Agua Potable Y Saneamiento Basico": 1.00
+    "Vivienda, Ciudad Y Territorio": 0.90
+    "Minas Y Energia": 0.85
+    "Agricultura Y Desarrollo Rural": 0.70
+    "Salud Y Proteccion Social": 0.65
+    "Educacion": 0.65
+    "Tecnologias De La Informacion Y Las Comunicaciones": 0.55
+    "Inclusion Social Y Reconciliacion": 0.50
+    "Comercio, Industria Y Turismo": 0.45
+    "Ciencia, Tecnologia E Innovacion": 0.40
+    "Cultura": 0.30
+    "Deporte Y Recreacion": 0.30
+    "Gobierno Territorial": 0.15
+    "_defecto": 0.35
+
+  # CORRECCION 2026-09-11: 'estadoproyecto' resulto constante en el universo
+  # evaluable (los 491 proyectos con apropiacion estan 'En Ejecucion'), asi
+  # que no discriminaba. Se usa 'subestadoproyecto', que si tiene tres
+  # niveles reales y es mejor senal de actividad del proyecto.
+  estado_proyecto:
+    "En ejecucion (PGN, Territorio)": 1.00
+    "En ejecucion": 1.00
+    "Terminado": 0.95
+    "Con recursos solicitados (PIIP)": 0.70
+    "Viable": 0.55
+    "Aprobado": 0.55
+    "Sin recursos para la vigencia actual (PGN, Territorio)": 0.35
+    "Formulacion": 0.25
+    "Devuelto a MGA": 0.20
+    "Inactivo (PGN, Territorio)": 0.15
+    "No viable": 0.00
+    "_defecto": 0.30
+
+  fuentes_externas:
+    - "Presupuesto General de la Nacion"
+    - "SGR - Sistema General de Regalias"
+    - "Credito"
+    - "Cooperacion"
+    - "Privados"
+
+# Poblacion municipal para normalizar inversion relativa.
+# PENDIENTE DE VERIFICACION: reemplazar con dato TerriData antes de la entrega.
+poblacion:
+  "25175": 146521
+  "25126": 92202
+  "_fuente": "DANE, proyecciones de poblacion municipal. VERIFICAR."
+
+semilla_aleatoria: 42

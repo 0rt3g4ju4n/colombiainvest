@@ -1,0 +1,97 @@
+# Fuentes de datos verificadas contra la API de Socrata el 2026-09-11.
+# Los nombres de campo fueron confirmados consultando el endpoint de metadatos,
+# no se asumieron. Ver docs/diagnostico_fuentes.md.
+
+socrata:
+  dominio: "www.datos.gov.co"
+  base_recurso: "https://www.datos.gov.co/resource/"
+  base_metadatos: "https://www.datos.gov.co/api/views/"
+  paginacion: 5000
+  espera_entre_lotes_s: 0.4
+  reintentos: 3
+
+# Foco territorial del caso de aplicacion
+territorio:
+  municipios:
+    - nombre: "Chia"
+      nombre_fuente: "Chía"
+      divipola: "25175"
+      entidad_suifp: "ChíaCundinamarca"
+    - nombre: "Cajica"
+      nombre_fuente: "Cajicá"
+      divipola: "25126"
+      entidad_suifp: "CajicáCundinamarca"
+  departamento: "Cundinamarca"
+
+# Datasets del SUIFP del DNP. Unidad de analisis: proyecto BPIN.
+datasets:
+  localizacion:
+    id: "xikz-44ja"
+    nombre: "DNP-LocalizacionProyecto"
+    llave: "bpin"
+    campos: [bpin, nombreproyecto, region, codigodepartamento, departamento,
+             codigomunicipio, municipio, entidadresponsable, sector,
+             codigoentidadresponsable]
+    filtro_por: "entidadresponsable"
+
+  seguimiento:
+    id: "7mxf-bp6x"
+    nombre: "DNP-SeguimientoProyecto"
+    llave: "bpin"
+    campos: [bpin, avancefisico, avancefinanciero, nombreproyecto, horizonte,
+             sectorproyecto, valorvigente, entidadresponsable]
+    filtro_por: "bpin"
+
+  ejecucion:
+    id: "u3qu-swda"
+    nombre: "DNP-EjecucionProyectoDivipola"
+    llave: "bpin"
+    granularidad: "bpin x vigencia x fuente"
+    campos: [bpin, nombreproyecto, sectorproyecto, codigoentidadresponsable,
+             entidadresponsable, vigencia, valorvigente, valorcomprometido,
+             valorobligado, valorpagado, fuentefinanciacion,
+             tipoentidadfuentefinanciacion, entidadfuentefinanciacion,
+             tiporecursofuentefinanciacion, codigomunicipio, municipio]
+    filtro_por: "bpin"
+
+  datos_basicos:
+    id: "cf9k-55fw"
+    nombre: "DNP-proyectos_datos_basicos"
+    llave: "bpin"
+    campos: [bpin, nombreproyecto, objetivogeneral, estadoproyecto, horizonte,
+             sector, entidadresponsable, programapresupuestal, tipoproyecto,
+             plandesarrollonacional, valortotalproyecto, valorvigenteproyecto,
+             valorobligacionproyecto, valorpagoproyecto, subestadoproyecto,
+             codigoentidadresponsable, totalbeneficiario]
+    filtro_por: "bpin"
+
+  beneficiarios:
+    id: "iuc2-3r6h"
+    nombre: "DNP-BeneficiariosProyectoLocalizacion"
+    llave: "bpin"
+    campos: [bpin, nombreproyecto, departamento, municipio, totalbeneficiario,
+             sector, entidadresponsable]
+    filtro_por: "bpin"
+    # ADVERTENCIA VERIFICADA: totalbeneficiario = 0 en los 640 proyectos de
+    # Chia y Cajica. El campo existe pero no esta diligenciado. Impacto social
+    # se construye por proxy hasta que llegue fuente alterna.
+
+  entidad_ejecutora:
+    id: "epzv-8ck4"
+    nombre: "DNP-EntidadEjecutoraProyecto"
+    llave: "bpin"
+    filtro_por: "bpin"
+
+# Evidencia contractual complementaria. NO es la unidad de analisis.
+# Verificado: SECOP II Contratos no expone BPIN, y DNP-ProyectosContratos
+# (uwns-mbwd) devolvio cero coincidencias con los BPIN municipales.
+# El cruce solo es posible por similitud de texto, con tasa de
+# emparejamiento reportada como limitacion.
+secop:
+  id: "jbjy-vk9h"
+  nombre: "SECOP II - Contratos Electronicos"
+  filtro_departamento: "Cundinamarca"
+  entidades_excluidas:
+    - "SENA REGIONAL CUNDINAMARCA Grupo Administrativo CDA"
+    - "Universidad de La Sabana"
+    - "INSTITUCION EDUCATIVA DEPARTAMENTAL ANTONIO NARIÑO"
