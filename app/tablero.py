@@ -106,12 +106,13 @@ puntajes = puntajes_dimension(cfg, len(df))
 # ---------------------------------------------------------------------------
 # Encabezado y navegacion
 # ---------------------------------------------------------------------------
-st.markdown(
-    '<div class="ci-barra"><span class="marca">ColombiaInvest</span>'
-    '<span class="lema">Analitica de proyectos de inversion publica</span></div>'
-    '<div class="ci-franja"></div>',
-    unsafe_allow_html=True,
-)
+with st.container(key="cihead"):
+    st.markdown(
+        '<div class="ci-barra"><span class="marca">ColombiaInvest</span>'
+        '<span class="lema">Analitica de proyectos de inversion publica</span>'
+        '</div><div class="ci-franja"></div>',
+        unsafe_allow_html=True,
+    )
 # st.container(key=...) genera la clase CSS st-key-cinav, que es lo que
 # permite estilar solo esta barra sin tocar los demas radios de la app.
 with st.container(key="cinav"):
@@ -156,13 +157,6 @@ else:
             st.stop()
         esquema = {d: v / total for d, v in crudos.items()}
 
-    # Peso efectivo de cada dimension, de 0 a 100, siempre visible.
-    st.sidebar.markdown('<div class="ci-filtro-tit">Peso aplicado</div>',
-                        unsafe_allow_html=True)
-    st.sidebar.markdown(
-        "".join(barra_peso(ETIQUETAS[d], esquema[d]) for d in DIMENSIONES),
-        unsafe_allow_html=True,
-    )
     st.session_state["esquema_activo"] = esquema
     st.session_state["nombre_esquema"] = nombre_esquema
 
@@ -324,13 +318,11 @@ if seccion == "Quienes somos":
         col.markdown(f'<div class="ci-panel"><h3>{tit}</h3><p>{txt}</p></div>',
                      unsafe_allow_html=True)
 
-    st.markdown("### Fuentes")
     st.markdown(
-        "Sistema Unificado de Inversion y Finanzas Publicas del Departamento "
-        "Nacional de Planeacion, consultado por la API de datos.gov.co. "
-        "Se complementa con el Informe de Gestion 2024 del municipio de Cajica "
-        "y el listado de proyectos del Plan de Desarrollo Municipal. "
-        "SECOP II se emplea como evidencia contractual complementaria."
+        '<p class="ci-nota">Fuente: Sistema Unificado de Inversion y Finanzas '
+        "Publicas del Departamento Nacional de Planeacion, con informacion "
+        "complementaria de los municipios de Chia y Cajica.</p>",
+        unsafe_allow_html=True,
     )
     st.markdown(
         '<p class="ci-nota">La calificacion es un instrumento de analisis. '

@@ -32,6 +32,11 @@ PALETA = {
 # barra superior se extienda de borde a borde.
 MARGEN = "2.5rem"
 
+# Altos de la cabecera fija. Se usan para reservar espacio en el contenido
+# y en el panel lateral, de modo que la barra superior nunca los tape.
+ALTO_BARRA = "121px"      # barra azul mas la franja (medido en navegador)
+ALTO_CABECERA = "178px"   # barra azul, franja y navegacion
+
 
 def color_score(valor: float) -> str:
     if valor >= 70:
@@ -96,6 +101,8 @@ CSS = f"""
     --gris-texto: {PALETA['gris_texto']};
     --texto: {PALETA['texto']};
     --margen: {MARGEN};
+    --alto-barra: {ALTO_BARRA};
+    --alto-cabecera: {ALTO_CABECERA};
   }}
 
   /* Solo se sube la base. Aplicar font-size a [class*="st-"] aplasta la
@@ -106,39 +113,57 @@ CSS = f"""
     font-size: .92rem !important; color: var(--gris-texto) !important;
   }}
 
-  /* El contenedor ocupa todo el ancho para que la barra superior pueda
-     extenderse de borde a borde. El padding superior deja libre la franja
-     de herramientas de Streamlit, que va fija arriba. */
-  .block-container {{
-    padding: 3.4rem var(--margen) 3rem var(--margen) !important;
-    max-width: 100% !important;
-  }}
+  /* La franja de herramientas propia de Streamlit se oculta: la cabecera
+     del producto ocupa ese espacio. */
+  [data-testid="stHeader"] {{ display: none !important; }}
 
-  /* ---------- barra superior, de borde a borde ---------- */
-  .ci-barra {{
-    background: var(--azul-gov);
-    color: #fff;
-    padding: 20px var(--margen) 18px var(--margen);
-    margin: 0 calc(-1 * var(--margen));
-    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
-    font-family: Roboto, "Segoe UI", sans-serif;
+  /* ---------- cabecera fija, por encima de la barra lateral ----------
+     Va fija arriba y ocupa todo el ancho de la ventana. Lo unico que se
+     desplaza cuando aparece el panel de filtros es el contenido de abajo,
+     nunca la cabecera. */
+  .st-key-cihead {{
+    position: fixed; top: 0; left: 0; right: 0; z-index: 999995;
   }}
-  .ci-barra .marca {{ font-size: 1.85rem; font-weight: 800; letter-spacing: -0.4px; }}
-  .ci-barra .lema {{ font-size: 1rem; opacity: 0.95; }}
-  .ci-franja {{
-    height: 7px; margin: 0 calc(-1 * var(--margen)) 4px calc(-1 * var(--margen));
-    background: linear-gradient(90deg,
-      var(--azul-oscuro) 0 33%, var(--naranja) 33% 66%, var(--azul-claro) 66% 100%);
-  }}
-
-  /* ---------- navegacion superior ---------- */
   .st-key-cinav {{
-    margin: 0 calc(-1 * var(--margen)) 22px calc(-1 * var(--margen));
+    position: fixed; top: var(--alto-barra); left: 0; right: 0; z-index: 999995;
     padding: 0 var(--margen);
     background: #fff; border-bottom: 2px solid var(--gris-borde);
   }}
+
+  /* Se reserva el alto de la cabecera en el area principal y en el panel
+     lateral, para que nada quede tapado. */
+  .block-container {{
+    padding: calc(var(--alto-cabecera) + 1.4rem) var(--margen) 3rem var(--margen) !important;
+    max-width: 100% !important;
+  }}
+  section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
+    padding-top: calc(var(--alto-cabecera) + 0.6rem);
+  }}
+  /* El boton de colapso tambien debe quedar debajo de la cabecera. */
+  [data-testid="stSidebarCollapseButton"],
+  [data-testid="stSidebarCollapsedControl"] {{
+    top: calc(var(--alto-cabecera) - 2.2rem) !important;
+  }}
+
+  .ci-barra {{
+    background: var(--azul-gov);
+    color: #fff;
+    padding: 30px var(--margen) 28px var(--margen);
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+    font-family: Roboto, "Segoe UI", sans-serif;
+  }}
+  .ci-barra .marca {{ font-size: 2.15rem; font-weight: 800; letter-spacing: -0.5px; }}
+  .ci-barra .lema {{ font-size: 1.05rem; opacity: 0.95; }}
+  /* Franja en azules. Se retiro el naranja: era el unico color calido del
+     tablero y quedaba suelto frente al resto de la paleta. */
+  .ci-franja {{
+    height: 6px;
+    background: linear-gradient(90deg,
+      var(--azul-profundo) 0 34%, var(--azul-gov) 34% 67%, var(--azul-claro) 67% 100%);
+  }}
   .st-key-cinav div[role="radiogroup"] {{
-    flex-direction: row; gap: 2px; flex-wrap: wrap; margin-bottom: -2px;
+    flex-direction: row; gap: 2px; flex-wrap: nowrap; margin-bottom: -2px;
+    overflow-x: auto;
   }}
   .st-key-cinav div[role="radiogroup"] > label {{
     background: transparent; border: none;
@@ -235,6 +260,27 @@ CSS = f"""
     font-size: .92rem; color: var(--gris-texto); line-height: 1.6;
     border-top: 1px solid var(--gris-borde); padding-top: 12px; margin-top: 6px;
   }}
+
+  /* ---------- tablas legibles ----------
+     Streamlit pinta los encabezados y el indice en un gris muy claro que
+     se pierde, sobre todo en las tablas anchas. */
+  [data-testid="stDataFrame"] {{ font-size: .95rem; }}
+  [data-testid="stDataFrame"] [role="columnheader"],
+  [data-testid="stDataFrame"] [data-testid="stDataFrameResizable"] [role="columnheader"] {{
+    color: var(--texto) !important; font-weight: 700 !important;
+    background: var(--gris-fondo) !important;
+  }}
+  [data-testid="stDataFrame"] [role="rowheader"],
+  [data-testid="stDataFrame"] .row-header {{
+    color: var(--texto) !important; font-weight: 600 !important;
+  }}
+  .glideDataEditor {{ --gdg-text-header: {PALETA['texto']};
+                      --gdg-text-dark: {PALETA['texto']};
+                      --gdg-text-medium: {PALETA['texto']};
+                      --gdg-text-light: {PALETA['gris_texto']};
+                      --gdg-bg-header: {PALETA['gris_fondo']};
+                      --gdg-header-font-style: 700 13px;
+                      --gdg-font-family: Roboto, "Segoe UI", sans-serif; }}
 
   /* ---------- barra lateral, en azules ---------- */
   section[data-testid="stSidebar"] {{

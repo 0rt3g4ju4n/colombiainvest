@@ -1,0 +1,19 @@
+# Tema de ColombiaInvest.
+# El color primario de Streamlit por defecto es un rojo anaranjado (#FF4B4B)
+# que aparecia en radios, deslizadores, casillas y en las etiquetas del
+# selector multiple de la seccion Comparar. Se reemplaza por el azul
+# institucional de GOV.CO para que no quede ningun elemento fuera de paleta.
+
+[theme]
+base = "light"
+primaryColor = "#0B4EC8"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F4F4"
+textColor = "#1A1A1A"
+font = "sans serif"
+
+[server]
+headless = true
+
+[browser]
+gatherUsageStats = false
