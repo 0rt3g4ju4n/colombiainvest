@@ -5,7 +5,6 @@
 socrata:
   dominio: "www.datos.gov.co"
   base_recurso: "https://www.datos.gov.co/resource/"
-  base_metadatos: "https://www.datos.gov.co/api/views/"
   paginacion: 5000
   espera_entre_lotes_s: 0.4
   reintentos: 3

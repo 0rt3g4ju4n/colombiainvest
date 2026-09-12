@@ -22,7 +22,7 @@ import pandas as pd
 from scipy import stats
 
 from ..config import DIMENSIONES, ConfigModelo
-from .score import ESCALA, aplicar_esquema, calcular_dimensiones
+from .score import aplicar_esquema, calcular_dimensiones
 
 log = logging.getLogger(__name__)
 

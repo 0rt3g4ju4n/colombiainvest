@@ -33,7 +33,6 @@ def main() -> int:
 
     tabla.to_parquet(DIR_PROCESADOS / "proyectos_completo.parquet", index=False)
     evaluable.to_parquet(DIR_PROCESADOS / "proyectos_evaluables.parquet", index=False)
-    evaluable.to_csv(DIR_PROCESADOS / "proyectos_evaluables.csv", index=False, encoding="utf-8-sig")
 
     print("\n=== DATASET CONSTRUIDO ===")
     print(f"  universo total    : {len(tabla)} proyectos")

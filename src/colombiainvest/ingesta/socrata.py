@@ -28,14 +28,12 @@ class ClienteSocrata:
     def __init__(
         self,
         base_recurso: str = "https://www.datos.gov.co/resource/",
-        base_metadatos: str = "https://www.datos.gov.co/api/views/",
         paginacion: int = 5000,
         espera_s: float = 0.4,
         reintentos: int = 3,
         timeout: int = 120,
     ) -> None:
         self.base_recurso = base_recurso
-        self.base_metadatos = base_metadatos
         self.paginacion = paginacion
         self.espera_s = espera_s
         self.reintentos = reintentos
@@ -64,17 +62,6 @@ class ClienteSocrata:
         if isinstance(datos, dict) and datos.get("error"):
             raise ErrorSocrata(f"{recurso}: {datos.get('message')}")
         return datos
-
-    def metadatos(self, recurso: str) -> Dict[str, Any]:
-        return self._pedir(self.base_metadatos + recurso + ".json")
-
-    def campos(self, recurso: str) -> List[Dict[str, str]]:
-        """Nombres de campo REALES del dataset. Nunca asumirlos, verificarlos."""
-        meta = self.metadatos(recurso)
-        return [
-            {"campo": c["fieldName"], "tipo": c["dataTypeName"], "etiqueta": c.get("name", "")}
-            for c in meta["columns"]
-        ]
 
     # -- alto nivel ---------------------------------------------------------
     def descargar(

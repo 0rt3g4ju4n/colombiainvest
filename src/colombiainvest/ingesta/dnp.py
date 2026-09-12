@@ -23,7 +23,6 @@ def cliente_desde_config(cfg: ConfigFuentes) -> ClienteSocrata:
     s = cfg.socrata
     return ClienteSocrata(
         base_recurso=s["base_recurso"],
-        base_metadatos=s["base_metadatos"],
         paginacion=int(s["paginacion"]),
         espera_s=float(s["espera_entre_lotes_s"]),
         reintentos=int(s["reintentos"]),

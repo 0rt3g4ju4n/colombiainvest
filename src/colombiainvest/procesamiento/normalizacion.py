@@ -12,7 +12,7 @@ Con esa cola, min-max crudo comprime el 99,9% de los registros contra cero.
 from __future__ import annotations
 
 import logging
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 import pandas as pd
@@ -157,19 +157,3 @@ def normalizar_bloque(
         }
     return salida, diagnostico
 
-
-def comparar_metodos(
-    df: pd.DataFrame, nombre: str, sentido: int, config_norm: Dict[str, object]
-) -> pd.DataFrame:
-    """Compara la misma variable bajo los cuatro metodos. Util para sustentar."""
-    filas = {}
-    for metodo in METODOS:
-        filas[metodo] = normalizar_variable(
-            df[nombre], sentido, metodo,
-            bool(config_norm["winsorizar"]),
-            float(config_norm["percentil_inferior"]),
-            float(config_norm["percentil_superior"]),
-            bool(config_norm["log_montos"]),
-            nombre,
-        )
-    return pd.DataFrame(filas)
