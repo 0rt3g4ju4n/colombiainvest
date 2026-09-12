@@ -17,17 +17,22 @@ PALETA = {
     "azul_profundo": "#06357A",
     "naranja": "#DE8B34",         # tarjeta PUBLICA
     "azul_claro": "#93B2C6",      # tarjeta CONOCE
+    "azul_tenue": "#E4EDFA",      # fondo de la barra lateral
     "gris_fondo": "#F4F4F4",
-    "gris_borde": "#DDE1E6",
-    "gris_texto": "#5E5E5E",
+    "gris_borde": "#D7DCE2",
+    "gris_texto": "#4A4A4A",      # gris legible, no claro
     "blanco": "#FFFFFF",
     "texto": "#1A1A1A",
     "verde": "#069169",
-    "amarillo": "#E8B000",
+    "amarillo": "#C98A00",
     "rojo": "#A80521",
 }
 
-# Color del score segun tramo. Verde alto, amarillo medio, rojo bajo.
+# Margen lateral del area principal. Se usa tambien en negativo para que la
+# barra superior se extienda de borde a borde.
+MARGEN = "2.5rem"
+
+
 def color_score(valor: float) -> str:
     if valor >= 70:
         return PALETA["verde"]
@@ -60,8 +65,21 @@ def numero(valor: float, decimales: int = 0) -> str:
     except (TypeError, ValueError):
         return "n/d"
     s = f"{v:,.{decimales}f}"
-    # coma de miles a punto, punto decimal a coma
     return s.replace(",", "␟").replace(".", ",").replace("␟", ".")
+
+
+def barra_peso(etiqueta: str, peso: float, ancho: bool = False) -> str:
+    """Barra azul de 0 a 100 para mostrar cuanto pesa una dimension.
+
+    ancho=True usa una etiqueta larga sin recorte, para donde sobra espacio.
+    """
+    pct = max(0.0, min(peso * 100, 100.0))
+    clase = "ci-peso ci-peso-ancho" if ancho else "ci-peso"
+    return (
+        f'<div class="{clase}"><span class="et">{etiqueta}</span>'
+        f'<span class="pista"><span class="relleno" style="width:{pct:.0f}%"></span></span>'
+        f'<span class="val">{pct:.0f}</span></div>'
+    )
 
 
 CSS = f"""
@@ -69,57 +87,73 @@ CSS = f"""
   :root {{
     --azul-gov: {PALETA['azul_gov']};
     --azul-oscuro: {PALETA['azul_oscuro']};
+    --azul-profundo: {PALETA['azul_profundo']};
     --naranja: {PALETA['naranja']};
     --azul-claro: {PALETA['azul_claro']};
+    --azul-tenue: {PALETA['azul_tenue']};
     --gris-fondo: {PALETA['gris_fondo']};
     --gris-borde: {PALETA['gris_borde']};
     --gris-texto: {PALETA['gris_texto']};
     --texto: {PALETA['texto']};
+    --margen: {MARGEN};
   }}
 
-  .block-container {{ padding-top: 1.2rem; max-width: 1500px; }}
+  /* Solo se sube la base. Aplicar font-size a [class*="st-"] aplasta la
+     escala tipografica propia de Streamlit y deja las metricas diminutas. */
+  html, body {{ font-size: 16.5px; }}
+  .stMarkdown p, .stMarkdown li {{ font-size: 1rem; line-height: 1.62; }}
+  .stCaption, [data-testid="stCaptionContainer"] p {{
+    font-size: .92rem !important; color: var(--gris-texto) !important;
+  }}
 
-  /* ---------- barra superior ---------- */
+  /* El contenedor ocupa todo el ancho para que la barra superior pueda
+     extenderse de borde a borde. El padding superior deja libre la franja
+     de herramientas de Streamlit, que va fija arriba. */
+  .block-container {{
+    padding: 3.4rem var(--margen) 3rem var(--margen) !important;
+    max-width: 100% !important;
+  }}
+
+  /* ---------- barra superior, de borde a borde ---------- */
   .ci-barra {{
     background: var(--azul-gov);
     color: #fff;
-    padding: 10px 20px;
-    border-radius: 6px 6px 0 0;
-    display: flex; align-items: baseline; gap: 14px;
+    padding: 20px var(--margen) 18px var(--margen);
+    margin: 0 calc(-1 * var(--margen));
+    display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
     font-family: Roboto, "Segoe UI", sans-serif;
   }}
-  .ci-barra .marca {{ font-size: 1.35rem; font-weight: 800; letter-spacing: -0.3px; }}
-  .ci-barra .lema {{ font-size: 0.82rem; opacity: 0.92; }}
+  .ci-barra .marca {{ font-size: 1.85rem; font-weight: 800; letter-spacing: -0.4px; }}
+  .ci-barra .lema {{ font-size: 1rem; opacity: 0.95; }}
   .ci-franja {{
-    height: 5px; border-radius: 0 0 6px 6px; margin-bottom: 14px;
+    height: 7px; margin: 0 calc(-1 * var(--margen)) 4px calc(-1 * var(--margen));
     background: linear-gradient(90deg,
       var(--azul-oscuro) 0 33%, var(--naranja) 33% 66%, var(--azul-claro) 66% 100%);
   }}
 
-  /* ---------- navegacion superior ----------
-     Se estila solo el contenedor con key "cinav", para no afectar los
-     demas radios de la aplicacion. */
+  /* ---------- navegacion superior ---------- */
+  .st-key-cinav {{
+    margin: 0 calc(-1 * var(--margen)) 22px calc(-1 * var(--margen));
+    padding: 0 var(--margen);
+    background: #fff; border-bottom: 2px solid var(--gris-borde);
+  }}
   .st-key-cinav div[role="radiogroup"] {{
-    flex-direction: row; gap: 2px; flex-wrap: wrap;
-    border-bottom: 2px solid var(--gris-borde);
-    margin-bottom: 16px;
+    flex-direction: row; gap: 2px; flex-wrap: wrap; margin-bottom: -2px;
   }}
   .st-key-cinav div[role="radiogroup"] > label {{
     background: transparent; border: none;
     border-bottom: 3px solid transparent;
-    padding: 9px 18px 10px 18px; margin: 0 0 -2px 0;
+    padding: 12px 20px 13px 20px; margin: 0;
     font-weight: 600; cursor: pointer; transition: all .12s ease;
   }}
   .st-key-cinav div[role="radiogroup"] > label > div:first-child {{
-    display: none !important;   /* oculta el circulo del radio */
+    display: none !important;
   }}
   .st-key-cinav div[role="radiogroup"] > label p {{
-    font-size: .93rem; font-weight: 600; color: var(--gris-texto);
+    font-size: 1.02rem; font-weight: 600; color: var(--gris-texto);
     transition: color .12s ease;
   }}
-  .st-key-cinav div[role="radiogroup"] > label:hover {{
-    background: rgba(11,78,200,.06);
-  }}
+  .st-key-cinav div[role="radiogroup"] > label:hover {{ background: rgba(11,78,200,.06); }}
   .st-key-cinav div[role="radiogroup"] > label:hover p {{ color: var(--azul-gov); }}
   .st-key-cinav div[role="radiogroup"] > label:has(input:checked) {{
     border-bottom-color: var(--azul-gov);
@@ -131,81 +165,122 @@ CSS = f"""
   /* ---------- tarjeta de proyecto ---------- */
   .ci-card {{
     background: #fff; border: 1px solid var(--gris-borde); border-radius: 8px;
-    padding: 14px 16px 12px 16px;
-    /* altura fija para que la cuadricula quede pareja, como en una vitrina */
-    min-height: 400px; display: flex; flex-direction: column;
+    padding: 15px 17px 13px 17px;
+    min-height: 410px; display: flex; flex-direction: column;
     box-shadow: 0 1px 3px rgba(0,0,0,.06);
     transition: box-shadow .15s ease, border-color .15s ease;
     font-family: Roboto, "Segoe UI", sans-serif;
   }}
-  .ci-card .ci-barras {{ margin-top: auto; padding-top: 10px; }}
-  .ci-card:hover {{ box-shadow: 0 4px 14px rgba(0,0,0,.12); border-color: var(--azul-claro); }}
+  .ci-card:hover {{ box-shadow: 0 4px 14px rgba(0,0,0,.12); border-color: var(--azul-gov); }}
+  .ci-card .ci-barras {{ margin-top: auto; padding-top: 12px; }}
   .ci-card-top {{ display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }}
   .ci-sector {{
     background: var(--gris-fondo); color: var(--gris-texto);
-    font-size: .68rem; font-weight: 700; letter-spacing: .3px;
-    padding: 3px 8px; border-radius: 3px; text-transform: uppercase;
+    font-size: .72rem; font-weight: 700; letter-spacing: .3px;
+    padding: 4px 9px; border-radius: 3px; text-transform: uppercase;
   }}
   .ci-score {{
-    color: #fff; font-weight: 800; font-size: 1.05rem;
-    padding: 4px 10px; border-radius: 4px; white-space: nowrap;
+    color: #fff; font-weight: 800; font-size: 1.18rem;
+    padding: 5px 12px; border-radius: 4px; white-space: nowrap;
   }}
   .ci-titulo {{
-    font-size: .95rem; font-weight: 600; line-height: 1.32; color: var(--texto);
-    margin: 10px 0 6px 0; min-height: 2.6em;
+    font-size: 1.02rem; font-weight: 600; line-height: 1.34; color: var(--texto);
+    margin: 11px 0 7px 0; min-height: 2.7em;
   }}
-  .ci-meta {{ font-size: .74rem; color: var(--gris-texto); margin-bottom: 8px; }}
-  .ci-precio {{
-    font-size: 1.32rem; font-weight: 300; color: var(--texto); line-height: 1.1;
-  }}
-  .ci-precio-nota {{ font-size: .7rem; color: var(--gris-texto); margin-bottom: 10px; }}
-  .ci-datos {{ font-size: .78rem; color: var(--texto); line-height: 1.6; }}
+  .ci-meta {{ font-size: .84rem; color: var(--gris-texto); margin-bottom: 9px; }}
+  .ci-precio {{ font-size: 1.5rem; font-weight: 300; color: var(--texto); line-height: 1.1; }}
+  .ci-precio-nota {{ font-size: .78rem; color: var(--gris-texto); margin-bottom: 11px; }}
+  .ci-datos {{ font-size: .88rem; color: var(--texto); line-height: 1.62; }}
   .ci-datos b {{ font-weight: 600; }}
-  .ci-barras {{ margin-top: 10px; }}
-  .ci-fila {{ display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }}
-  .ci-fila .et {{ font-size: .66rem; color: var(--gris-texto); width: 74px; flex: none; }}
-  .ci-fila .pista {{ flex: 1; height: 6px; background: var(--gris-fondo); border-radius: 3px; overflow: hidden; }}
-  .ci-fila .relleno {{ height: 100%; border-radius: 3px; }}
-  .ci-fila .val {{ font-size: .66rem; color: var(--gris-texto); width: 24px; text-align: right; flex: none; }}
+  .ci-fila {{ display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }}
+  .ci-fila .et {{ font-size: .76rem; color: var(--gris-texto); width: 84px; flex: none; }}
+  .ci-fila .pista {{
+    display: block; flex: 1; height: 7px; background: var(--gris-fondo);
+    border-radius: 4px; overflow: hidden;
+  }}
+  .ci-fila .relleno {{ display: block; height: 100%; border-radius: 4px; }}
+  .ci-fila .val {{ font-size: .76rem; color: var(--gris-texto); width: 26px; text-align: right; flex: none; }}
 
   /* ---------- resumen de resultados ---------- */
   .ci-resultados {{
     display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 2px 12px 2px; border-bottom: 1px solid var(--gris-borde);
-    margin-bottom: 14px; font-family: Roboto, "Segoe UI", sans-serif;
+    padding: 4px 2px 12px 2px; border-bottom: 1px solid var(--gris-borde);
+    margin-bottom: 16px; font-family: Roboto, "Segoe UI", sans-serif;
   }}
-  .ci-resultados .conteo {{ font-size: .95rem; color: var(--texto); }}
+  .ci-resultados .conteo {{ font-size: 1.05rem; color: var(--texto); }}
   .ci-resultados .conteo b {{ font-weight: 700; }}
 
-  /* ---------- chips de filtro aplicado ---------- */
   .ci-chip {{
     display: inline-block; background: rgba(11,78,200,.08); color: var(--azul-gov);
-    border: 1px solid rgba(11,78,200,.25); border-radius: 14px;
-    padding: 2px 10px; font-size: .74rem; font-weight: 600; margin: 0 5px 5px 0;
+    border: 1px solid rgba(11,78,200,.28); border-radius: 14px;
+    padding: 3px 11px; font-size: .82rem; font-weight: 600; margin: 0 5px 5px 0;
   }}
 
-  /* ---------- bloque de contenido institucional ---------- */
+  /* ---------- bloques institucionales ---------- */
   .ci-hero {{
     background: linear-gradient(110deg, var(--azul-oscuro), var(--azul-gov));
-    color: #fff; padding: 30px 34px; border-radius: 8px; margin-bottom: 20px;
+    color: #fff; padding: 36px 40px; border-radius: 8px; margin-bottom: 24px;
     font-family: Roboto, "Segoe UI", sans-serif;
   }}
-  .ci-hero h1 {{ font-size: 1.9rem; margin: 0 0 10px 0; font-weight: 800; line-height: 1.2; }}
-  .ci-hero p {{ font-size: 1rem; opacity: .95; margin: 0; line-height: 1.55; max-width: 70ch; }}
+  .ci-hero h1 {{ font-size: 2.15rem; margin: 0 0 12px 0; font-weight: 800; line-height: 1.22; }}
+  .ci-hero p {{ font-size: 1.08rem; opacity: .96; margin: 0; line-height: 1.6; max-width: 78ch; }}
   .ci-panel {{
-    background: #fff; border: 1px solid var(--gris-borde); border-left: 4px solid var(--naranja);
-    border-radius: 6px; padding: 16px 18px; margin-bottom: 12px;
+    background: #fff; border: 1px solid var(--gris-borde);
+    border-left: 4px solid var(--azul-gov);
+    border-radius: 6px; padding: 17px 19px; margin-bottom: 12px; height: 100%;
   }}
-  .ci-panel h3 {{ margin: 0 0 8px 0; font-size: 1.02rem; color: var(--azul-oscuro); }}
-  .ci-panel p {{ margin: 0; font-size: .88rem; line-height: 1.6; color: var(--texto); }}
+  .ci-panel h3 {{ margin: 0 0 9px 0; font-size: 1.1rem; color: var(--azul-oscuro); }}
+  .ci-panel p {{ margin: 0; font-size: .95rem; line-height: 1.62; color: var(--texto); }}
+  .ci-nota {{
+    font-size: .92rem; color: var(--gris-texto); line-height: 1.6;
+    border-top: 1px solid var(--gris-borde); padding-top: 12px; margin-top: 6px;
+  }}
 
-  /* ---------- barra lateral ---------- */
-  section[data-testid="stSidebar"] {{ background: #fff; border-right: 1px solid var(--gris-borde); }}
-  section[data-testid="stSidebar"] h2 {{ font-size: 1rem; }}
-  .ci-filtro-tit {{
-    font-size: .78rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .4px; color: var(--gris-texto);
-    margin: 14px 0 4px 0; padding-bottom: 4px; border-bottom: 1px solid var(--gris-borde);
+  /* ---------- barra lateral, en azules ---------- */
+  section[data-testid="stSidebar"] {{
+    background: var(--azul-tenue);
+    border-right: 1px solid var(--gris-borde);
   }}
+  section[data-testid="stSidebar"] * {{ color: var(--texto); }}
+  .ci-filtro-tit {{
+    font-size: .86rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .4px; color: var(--azul-oscuro);
+    margin: 18px 0 6px 0; padding-bottom: 5px;
+    border-bottom: 2px solid var(--azul-claro);
+  }}
+  section[data-testid="stSidebar"] label p {{ font-size: .94rem; }}
+  section[data-testid="stSidebar"] details {{
+    background: #fff; border: 1px solid var(--gris-borde); border-radius: 6px;
+  }}
+
+  /* barra azul de peso por dimension */
+  .ci-peso {{ display: flex; align-items: center; gap: 9px; margin-bottom: 9px; }}
+  .ci-peso .et {{
+    font-size: .86rem; color: var(--texto); width: 84px; flex: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }}
+  .ci-peso .pista {{
+    display: block; flex: 1; height: 13px; background: #fff;
+    border: 1px solid var(--azul-claro); border-radius: 7px; overflow: hidden;
+  }}
+  .ci-peso .relleno {{
+    display: block; height: 100%; background: var(--azul-gov);
+    border-radius: 6px 0 0 6px; min-width: 3px;
+  }}
+  .ci-peso .val {{
+    font-size: .88rem; font-weight: 800; color: var(--azul-oscuro);
+    width: 26px; text-align: right; flex: none;
+  }}
+  .ci-peso-ancho {{ max-width: 520px; }}
+  .ci-peso-ancho .et {{ width: 190px; font-size: .95rem; }}
+  .ci-peso-ancho .pista {{ height: 15px; }}
+</style>
+"""
+
+# Se inyecta solo en las secciones que no usan filtros.
+OCULTAR_LATERAL = """
+<style>
+  section[data-testid="stSidebar"] {display: none !important;}
+  div[data-testid="stSidebarCollapsedControl"] {display: none !important;}
 </style>
 """

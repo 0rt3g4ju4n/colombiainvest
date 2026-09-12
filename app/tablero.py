@@ -30,7 +30,9 @@ from colombiainvest.modelo.score import aplicar_esquema, calcular_dimensiones  #
 from colombiainvest.modelo.sensibilidad import (  # noqa: E402
     comparar_esquemas, contribucion_dimensiones,
 )
-from estilos import CSS, PALETA, color_score, moneda, numero  # noqa: E402
+from estilos import (  # noqa: E402
+    CSS, OCULTAR_LATERAL, barra_peso, color_score, moneda, numero,
+)
 
 ETIQUETAS = {
     "viabilidad_financiera": "Viabilidad",
@@ -117,34 +119,52 @@ with st.container(key="cinav"):
                        label_visibility="collapsed")
 
 # ---------------------------------------------------------------------------
-# Ponderacion (barra lateral). Sin cifras de dinero: es parametro interno.
+# Ponderacion. La barra lateral solo existe donde hay algo que filtrar o
+# ponderar; en las secciones de lectura se oculta por completo.
 # ---------------------------------------------------------------------------
-st.sidebar.markdown('<div class="ci-filtro-tit">Ponderacion del modelo</div>',
-                    unsafe_allow_html=True)
-modo = st.sidebar.radio(
-    "Esquema", ["Recomendado", "Por perfil", "Personalizado"],
-    label_visibility="collapsed",
-    help="Los pesos provienen de juicio experto y seran validados con entrevistas.",
-)
-if modo == "Recomendado":
-    esquema, nombre_esquema = cfg.esquema_base, "esquema_base"
-elif modo == "Por perfil":
-    alternativos = [e for e in cfg.esquemas_disponibles if e != "esquema_base"]
-    nombre_esquema = st.sidebar.selectbox("Perfil de inversionista", alternativos)
-    esquema = cfg.esquema(nombre_esquema)
-    st.sidebar.caption(cfg.descripcion_esquema(nombre_esquema))
+CON_LATERAL = ("Proyectos", "Comparar", "Indicadores")
+
+if seccion not in CON_LATERAL:
+    st.markdown(OCULTAR_LATERAL, unsafe_allow_html=True)
+    esquema = st.session_state.get("esquema_activo", cfg.esquema_base)
+    nombre_esquema = st.session_state.get("nombre_esquema", "esquema_base")
 else:
-    nombre_esquema = "personalizado"
-    crudos = {
-        d: st.sidebar.slider(ETIQUETAS_LARGAS[d], 0.0, 1.0,
-                             float(cfg.esquema_base[d]), 0.05)
-        for d in DIMENSIONES
-    }
-    total = sum(crudos.values())
-    if total == 0:
-        st.sidebar.error("Al menos un peso debe ser mayor que cero.")
-        st.stop()
-    esquema = {d: v / total for d, v in crudos.items()}
+    st.sidebar.markdown('<div class="ci-filtro-tit">Ponderacion del modelo</div>',
+                        unsafe_allow_html=True)
+    modo = st.sidebar.radio(
+        "Esquema", ["Recomendado", "Por perfil", "Personalizado"],
+        label_visibility="collapsed",
+        help="Los pesos provienen de juicio experto y seran validados con entrevistas.",
+    )
+    if modo == "Recomendado":
+        esquema, nombre_esquema = cfg.esquema_base, "esquema_base"
+    elif modo == "Por perfil":
+        alternativos = [e for e in cfg.esquemas_disponibles if e != "esquema_base"]
+        nombre_esquema = st.sidebar.selectbox("Perfil de inversionista", alternativos)
+        esquema = cfg.esquema(nombre_esquema)
+        st.sidebar.caption(cfg.descripcion_esquema(nombre_esquema))
+    else:
+        nombre_esquema = "personalizado"
+        crudos = {
+            d: st.sidebar.slider(ETIQUETAS_LARGAS[d], 0.0, 1.0,
+                                 float(cfg.esquema_base[d]), 0.05)
+            for d in DIMENSIONES
+        }
+        total = sum(crudos.values())
+        if total == 0:
+            st.sidebar.error("Al menos un peso debe ser mayor que cero.")
+            st.stop()
+        esquema = {d: v / total for d, v in crudos.items()}
+
+    # Peso efectivo de cada dimension, de 0 a 100, siempre visible.
+    st.sidebar.markdown('<div class="ci-filtro-tit">Peso aplicado</div>',
+                        unsafe_allow_html=True)
+    st.sidebar.markdown(
+        "".join(barra_peso(ETIQUETAS[d], esquema[d]) for d in DIMENSIONES),
+        unsafe_allow_html=True,
+    )
+    st.session_state["esquema_activo"] = esquema
+    st.session_state["nombre_esquema"] = nombre_esquema
 
 # ---------------------------------------------------------------------------
 # Score
@@ -178,7 +198,7 @@ def facetas(col: str, etiqueta: str, datos: pd.DataFrame) -> list[str]:
     return escogidos
 
 
-if seccion in ("Proyectos", "Comparar", "Indicadores"):
+if seccion in CON_LATERAL:
     sel_mun = facetas("municipio", "Municipio", base)
     sel_sec = facetas("sector", "Sector", base)
     if "tipo_intervencion" in base.columns:
@@ -312,11 +332,12 @@ if seccion == "Quienes somos":
         "y el listado de proyectos del Plan de Desarrollo Municipal. "
         "SECOP II se emplea como evidencia contractual complementaria."
     )
-    st.info(
-        "La calificacion es un instrumento de analisis. No es una recomendacion "
-        "de inversion ni una certificacion de riesgo, y la plataforma no "
-        "interviene en la captacion, custodia ni canalizacion de recursos.",
-        icon="i",
+    st.markdown(
+        '<p class="ci-nota">La calificacion es un instrumento de analisis. '
+        "No es una recomendacion de inversion ni una certificacion de riesgo, "
+        "y la plataforma no interviene en la captacion, custodia ni "
+        "canalizacion de recursos.</p>",
+        unsafe_allow_html=True,
     )
 
 # ===========================================================================
@@ -347,7 +368,9 @@ elif seccion == "Proyectos":
     chips()
 
     if vista.empty:
-        st.warning("Ningun proyecto cumple los filtros. Ajuste la seleccion.")
+        st.markdown('<p class="ci-nota">Ningun proyecto cumple los filtros '
+                    "aplicados. Ajuste la seleccion en el panel de la "
+                    "izquierda.</p>", unsafe_allow_html=True)
     else:
         por_pagina = 24
         paginas = int(np.ceil(len(vista) / por_pagina))
@@ -398,7 +421,8 @@ elif seccion == "Proyectos":
 elif seccion == "Comparar":
     st.subheader("Comparacion entre proyectos")
     if len(vista) < 2:
-        st.info("Se requieren al menos dos proyectos. Amplie los filtros.")
+        st.markdown('<p class="ci-nota">Se requieren al menos dos proyectos. '
+                    "Amplie los filtros.</p>", unsafe_allow_html=True)
     else:
         etiqueta = vista["bpin"] + "  |  " + vista["nombreproyecto"].str.slice(0, 70)
         opciones = dict(zip(etiqueta, vista["bpin"]))
@@ -546,7 +570,9 @@ elif seccion == "Contexto municipal":
     st.markdown("#### Informe de Gestion de Cajica 2024")
     ctx = contexto_cajica()
     if ctx is None:
-        st.info("Ejecute `python scripts/04_documentos.py` para generar esta seccion.")
+        st.markdown('<p class="ci-nota">Ejecute <code>python '
+                    "scripts/04_documentos.py</code> para generar esta "
+                    "seccion.</p>", unsafe_allow_html=True)
     else:
         st.caption(
             "Solo existe para Cajica y solo para 2024, por lo que no alimenta "
@@ -573,11 +599,12 @@ elif seccion == "Contexto municipal":
             hide_index=True, use_container_width=True, height=440,
         )
         peor = ctx.iloc[0]
-        st.warning(
-            f"Mayor brecha: **{peor['sector_informe']}**, con "
-            f"{peor['avance_fisico_sector']:.1f} % de avance fisico frente a "
-            f"{peor['ejecucion_presupuestal_sector']:.1f} % de ejecucion "
-            "presupuestal."
+        st.markdown(
+            f'<p class="ci-nota">Mayor brecha: <b>{peor["sector_informe"]}</b>, '
+            f'con {peor["avance_fisico_sector"]:.1f} % de avance fisico frente '
+            f'a {peor["ejecucion_presupuestal_sector"]:.1f} % de ejecucion '
+            "presupuestal.</p>",
+            unsafe_allow_html=True,
         )
 
 # ===========================================================================
@@ -596,11 +623,10 @@ elif seccion == "Metodologia":
     )
 
     st.markdown("#### Pesos aplicados")
-    st.dataframe(
-        pd.DataFrame({
-            "dimension": [ETIQUETAS_LARGAS[d] for d in DIMENSIONES],
-            "peso": [round(esquema[d], 3) for d in DIMENSIONES],
-        }), hide_index=True, use_container_width=True,
+    st.markdown(
+        "".join(barra_peso(ETIQUETAS_LARGAS[d], esquema[d], ancho=True)
+                for d in DIMENSIONES),
+        unsafe_allow_html=True,
     )
 
     st.markdown("#### Contribucion de cada dimension a la varianza del score")
