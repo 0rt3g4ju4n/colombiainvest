@@ -80,6 +80,58 @@ def _div(a: float, b: float, defecto: float = 0.0) -> float:
     return a / b if b not in (0, 0.0) else defecto
 
 
+# Tipo de intervencion derivado del verbo que encabeza el nombre del proyecto.
+# Es la unica senal de texto con distribucion util: el campo objetivogeneral
+# viene truncado a 249 caracteres, sin mencion de ODS y con solo 18 de 491
+# objetivos que contienen alguna cifra.
+TIPO_INTERVENCION = {
+    "CONSTRUCCION": "Inversion en capital",
+    "AMPLIACION": "Inversion en capital",
+    "ADECUACION": "Inversion en capital",
+    "CONSTRUCCIÓN": "Inversion en capital",
+    "AMPLIACIÓN": "Inversion en capital",
+    "ADQUISICION": "Inversion en capital",
+    "DOTACION": "Inversion en capital",
+    "DOTACIÓN": "Inversion en capital",
+    "MEJORAMIENTO": "Mejoramiento",
+    "OPTIMIZACION": "Mejoramiento",
+    "OPTIMIZACIÓN": "Mejoramiento",
+    "ACTUALIZACION": "Mejoramiento",
+    "ACTUALIZACIÓN": "Mejoramiento",
+    "MODERNIZACION": "Mejoramiento",
+    "MANTENIMIENTO": "Mantenimiento",
+    "CONSERVACION": "Mantenimiento",
+    "CONSERVACIÓN": "Mantenimiento",
+    "PROTECCION": "Mantenimiento",
+    "PROTECCIÓN": "Mantenimiento",
+    "FORTALECIMIENTO": "Fortalecimiento institucional",
+    "APOYO": "Fortalecimiento institucional",
+    "DESARROLLO": "Fortalecimiento institucional",
+    "GENERACION": "Fortalecimiento institucional",
+    "GENERACIÓN": "Fortalecimiento institucional",
+    "IMPLEMENTACION": "Implementacion de programa",
+    "IMPLEMENTACIÓN": "Implementacion de programa",
+    "PRESTACION": "Implementacion de programa",
+    "PRESTACIÓN": "Implementacion de programa",
+    "ESTUDIOS": "Preinversion",
+    "FORMULACION": "Preinversion",
+    "FORMULACIÓN": "Preinversion",
+    "DIAGNOSTICO": "Preinversion",
+}
+
+
+def clasificar_intervencion(nombre: Any) -> str:
+    """Clasifica el proyecto por el verbo que encabeza su nombre.
+
+    Atributo descriptivo para filtrar y presentar. NO entra al score
+    mientras el grupo no lo revise.
+    """
+    palabras = sin_tildes(nombre).upper().split()
+    if not palabras:
+        return "Sin clasificar"
+    return TIPO_INTERVENCION.get(palabras[0], "Otro")
+
+
 def _anios_horizonte(valor: Any) -> float:
     """Extrae la duracion en anios de un horizonte con formato '2020-2024'."""
     texto = sin_tildes(valor)
@@ -308,6 +360,10 @@ def calcular_variables(df: pd.DataFrame, cfg: ConfigModelo) -> pd.DataFrame:
     out["cofinanciacion_externa"] = [
         _div(e, v) for e, v in zip(out["valor_fuente_externa"], out["valor_vigente_total"])
     ]
+
+    # --- atributos descriptivos, fuera del score ---------------------------
+    out["tipo_intervencion"] = out["nombreproyecto"].map(clasificar_intervencion)
+    out["beneficiarios_declarados"] = out["totalbeneficiario"]
 
     return out
 
