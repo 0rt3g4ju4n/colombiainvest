@@ -1,5 +1,7 @@
 # ColombiaInvest
 
+**Version 1.0**
+
 Componente de datos y prototipo del trabajo de grado, Maestria en Ciencia de
 Datos, Universidad EAN, modalidad Creacion de Empresa.
 
@@ -31,25 +33,82 @@ src/colombiainvest/
   ingesta/       cliente Socrata y descarga del SUIFP
   procesamiento/ construccion del dataset, variables y normalizacion
   modelo/        score compuesto y analisis de sensibilidad
-scripts/         01_ingesta, 02_dataset, 03_score
-app/             prototipo en Streamlit
+scripts/         01_ingesta, 02_dataset, 03_score, 04_documentos
+app/             prototipo en Streamlit (tablero.py y estilos.py)
 tests/           pruebas del modelo
-datos/           crudos y procesados (no versionados)
-salidas/         ranking, sensibilidad y diagnosticos
+datos/documentos PDF municipales, versionados
+datos/           crudos y procesados (derivados, no versionados)
+salidas/         ranking, sensibilidad y diagnosticos (derivados)
 docs/            diagnostico de fuentes y notas metodologicas
+main.py          punto de entrada unico
+.vscode/         configuracion de F5
 ```
 
-## Uso
+## Como ejecutarlo
+
+Se necesita **Python 3.10 o superior**. Nada mas.
+
+### Opcion 1: Visual Studio Code
+
+Abrir la carpeta y presionar **F5**. Ya viene configurado en `.vscode/launch.json`.
+Hay tres configuraciones en el menu de depuracion:
+
+| Configuracion | Que hace |
+|---|---|
+| ColombiaInvest: abrir el tablero | instala lo que falte, construye los datos si es la primera vez y abre el navegador |
+| ColombiaInvest: reconstruir los datos | rehace los datos desde las fuentes, sin abrir el tablero |
+| ColombiaInvest: pruebas | corre la bateria de pruebas |
+
+### Opcion 2: consola
 
 ```bash
-pip install -r requirements.txt
+python main.py
+```
 
-python scripts/01_ingesta.py        # descarga el SUIFP (agregue --secop si lo necesita)
-python scripts/02_dataset.py        # construye el dataset y diagnostica variables
-python scripts/03_score.py          # califica y corre el analisis de sensibilidad
-python scripts/04_documentos.py     # procesa los PDF municipales (opcional)
-streamlit run app/tablero.py        # prototipo
-pytest tests/ -q                    # pruebas
+### Opcion 3: Windows sin editor
+
+Doble clic sobre `ejecutar.bat`.
+
+---
+
+`main.py` hace tres cosas en orden, y avisa en pantalla de cada una:
+
+1. Verifica las dependencias e instala las que falten desde `requirements.txt`.
+2. Construye los datos si no existen. **Solo la primera vez**, toma unos dos
+   minutos y **requiere conexion a internet**, porque descarga el SUIFP del
+   DNP desde `datos.gov.co`.
+3. Levanta el servidor en `http://localhost:8501` y abre el navegador.
+
+Para detenerlo, `Ctrl+C` en la consola.
+
+Opciones:
+
+```bash
+python main.py --reconstruir    # rehace los datos desde cero
+python main.py --solo-datos     # construye los datos y no abre el tablero
+python main.py --puerto 8600    # usa otro puerto
+python main.py --sin-instalar   # no instala nada, solo avisa que falta
+```
+
+### Que se versiona y que no
+
+Los datos derivados (`datos/crudos/`, `datos/procesados/`, `salidas/`) **no
+se versionan**: se reconstruyen solos. Lo que si viaja en el repositorio es
+`datos/documentos/`, con los dos PDF municipales que permiten reproducir la
+seccion de contexto sin depender de rutas locales.
+
+Quien reciba el proyecto en ZIP o lo clone obtiene exactamente el mismo
+resultado corriendo `main.py`.
+
+### Ejecutar los pasos por separado
+
+```bash
+python scripts/01_ingesta.py      # descarga el SUIFP (--secop agrega SECOP)
+python scripts/02_dataset.py      # construye el dataset y diagnostica variables
+python scripts/03_score.py        # califica y corre el analisis de sensibilidad
+python scripts/04_documentos.py   # procesa los PDF municipales
+python -m streamlit run app/tablero.py
+python -m pytest tests/ -q
 ```
 
 ## El modelo

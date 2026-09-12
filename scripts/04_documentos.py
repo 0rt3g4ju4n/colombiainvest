@@ -21,9 +21,25 @@ from colombiainvest.ingesta.documentos import (  # noqa: E402
     guardar, parsear_informe_gestion, parsear_proyectos_pdm,
 )
 
-DOCS = Path(r"D:\CIENCIA_DE_DATOS\PROYECTO DE GRADO")
-RUTA_PROYECTOS = DOCS / "PROYECTOS DE INVERSION 2024-202 PMD CAJICA IDEAL.pdf"
-RUTA_INFORME = DOCS / "INFORME DE GESTIÓN CAJICÁ 2024 FINAL.pdf"
+# Los documentos viajan dentro del repositorio para que cualquiera pueda
+# reproducir el resultado sin depender de rutas locales. Si no estuvieran,
+# se busca en la carpeta padre, que es donde los recibio el equipo.
+DOCS = Path(__file__).resolve().parents[1] / "datos" / "documentos"
+ALTERNA = Path(__file__).resolve().parents[2]
+NOMBRE_PROYECTOS = "PROYECTOS DE INVERSION 2024-202 PMD CAJICA IDEAL.pdf"
+NOMBRE_INFORME = "INFORME DE GESTIÓN CAJICÁ 2024 FINAL.pdf"
+
+
+def _ubicar(nombre: str) -> Path | None:
+    for base in (DOCS, ALTERNA):
+        ruta = base / nombre
+        if ruta.exists():
+            return ruta
+    return None
+
+
+RUTA_PROYECTOS = _ubicar(NOMBRE_PROYECTOS)
+RUTA_INFORME = _ubicar(NOMBRE_INFORME)
 
 
 def norm(s: str) -> str:
@@ -60,6 +76,17 @@ def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)-7s %(message)s")
     pd.set_option("display.width", 170)
     DIR_SALIDAS.mkdir(parents=True, exist_ok=True)
+
+    faltan = [n for n, r in ((NOMBRE_PROYECTOS, RUTA_PROYECTOS),
+                             (NOMBRE_INFORME, RUTA_INFORME)) if r is None]
+    if faltan:
+        print("No se hallaron los documentos municipales:")
+        for n in faltan:
+            print("  -", n)
+        print(f"Colocarlos en {DOCS} y volver a ejecutar.")
+        print("El resto del tablero funciona sin ellos; solo se pierde la "
+              "seccion de contexto municipal.")
+        return 1
 
     # ------------------------------------------------------------ proyectos
     proyectos = parsear_proyectos_pdm(RUTA_PROYECTOS)

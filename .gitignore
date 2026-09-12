@@ -1,8 +1,15 @@
-datos/crudos/
-datos/procesados/
-salidas/
 __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+venv/
 .ipynb_checkpoints/
+
+# Datos derivados: se reconstruyen con main.py
+datos/crudos/
+datos/procesados/
+salidas/
+
+# Los documentos municipales SI se versionan: son la fuente que permite
+# reproducir la seccion de contexto sin depender de rutas locales.
+!datos/documentos/
