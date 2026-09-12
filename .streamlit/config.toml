@@ -12,6 +12,12 @@ secondaryBackgroundColor = "#F4F4F4"
 textColor = "#1A1A1A"
 font = "sans serif"
 
+# La rejilla de datos se dibuja en un canvas y no lee variables CSS: su tema
+# lo arma Streamlit desde estas opciones. Por eso los encabezados salian
+# grises pese al CSS. Se les da el mismo azul claro del resto del tablero.
+dataframeHeaderBackgroundColor = "#E4EDFA"
+dataframeBorderColor = "#C3D4EC"
+
 [server]
 headless = true
 

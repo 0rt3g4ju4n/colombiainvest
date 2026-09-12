@@ -17,7 +17,9 @@ PALETA = {
     "azul_profundo": "#06357A",
     "naranja": "#DE8B34",         # tarjeta PUBLICA
     "azul_claro": "#93B2C6",      # tarjeta CONOCE
-    "azul_tenue": "#E4EDFA",      # fondo de la barra lateral
+    "azul_tenue": "#E4EDFA",      # fondo de la barra lateral y encabezados
+    "azul_hover": "#D2E0F5",      # realce de encabezado de tabla
+    "borde_azul": "#C3D4EC",      # lineas de tabla
     "gris_fondo": "#F4F4F4",
     "gris_borde": "#D7DCE2",
     "gris_texto": "#4A4A4A",      # gris legible, no claro
@@ -113,9 +115,27 @@ CSS = f"""
     font-size: .92rem !important; color: var(--gris-texto) !important;
   }}
 
-  /* La franja de herramientas propia de Streamlit se oculta: la cabecera
-     del producto ocupa ese espacio. */
-  [data-testid="stHeader"] {{ display: none !important; }}
+  /* La franja de herramientas propia de Streamlit estorba, pero NO se puede
+     ocultar entera: el boton que vuelve a abrir el panel lateral vive dentro
+     de ella. Si se oculta, al cerrar el panel no hay forma de recuperarlo.
+     Se deja el contenedor sin alto ni eventos, y se ocultan solo la barra de
+     herramientas y la decoracion. */
+  [data-testid="stHeader"] {{
+    background: transparent !important;
+    height: 0 !important; min-height: 0 !important;
+    pointer-events: none !important;
+    z-index: 999998 !important;
+  }}
+  /* stToolbar NO se puede ocultar: el boton de reapertura del panel es
+     descendiente suyo, y un ancestro en display:none anula el position
+     fixed del descendiente. Se ocultan solo Deploy, menu y acciones. */
+  [data-testid="stToolbar"] {{
+    display: flex !important; background: transparent !important;
+    pointer-events: none !important;
+  }}
+  [data-testid="stToolbarActions"], [data-testid="stAppDeployButton"],
+  [data-testid="stMainMenu"], [data-testid="stDecoration"],
+  [data-testid="stStatusWidget"] {{ display: none !important; }}
 
   /* ---------- cabecera fija, por encima de la barra lateral ----------
      Va fija arriba y ocupa todo el ancho de la ventana. Lo unico que se
@@ -139,11 +159,44 @@ CSS = f"""
   section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
     padding-top: calc(var(--alto-cabecera) + 0.6rem);
   }}
-  /* El boton de colapso tambien debe quedar debajo de la cabecera. */
-  [data-testid="stSidebarCollapseButton"],
-  [data-testid="stSidebarCollapsedControl"] {{
-    top: calc(var(--alto-cabecera) - 2.2rem) !important;
+  /* El boton para cerrar el panel va dentro del panel, bajo la cabecera. */
+  [data-testid="stSidebarCollapseButton"] {{
+    top: calc(var(--alto-cabecera) - 2.4rem) !important;
+    z-index: 999996 !important;
   }}
+  /* Boton para volver a abrir el panel. En esta version de Streamlit se
+     llama stExpandSidebarButton y el elemento con ese testid ES el boton,
+     no un contenedor: por eso hay que darle tamano y color a el mismo. */
+  [data-testid="stExpandSidebarButton"] {{
+    position: fixed !important;
+    top: calc(var(--alto-cabecera) + 0.6rem) !important;
+    left: 0.9rem !important;
+    z-index: 999999 !important;
+    pointer-events: auto !important;
+    display: flex !important;
+    align-items: center !important; justify-content: center !important;
+    width: 38px !important; height: 38px !important;
+    background: var(--azul-gov) !important;
+    border: 1px solid var(--azul-profundo) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,.22) !important;
+  }}
+  [data-testid="stExpandSidebarButton"]:hover {{
+    background: var(--azul-profundo) !important;
+  }}
+  [data-testid="stExpandSidebarButton"] span {{
+    color: #fff !important; fill: #fff !important;
+  }}
+
+  /* --- selector desplegable: elegir, no escribir ---
+     BaseWeb deja el campo editable y el usuario puede teclear texto que no
+     corresponde a ninguna opcion. Se anula el puntero sobre el campo: el
+     clic pasa al control, que abre la lista, pero el campo no recibe foco. */
+  div[data-baseweb="select"] input {{
+    pointer-events: none !important;
+    caret-color: transparent !important;
+  }}
+  div[data-baseweb="select"] > div {{ cursor: pointer; }}
 
   .ci-barra {{
     background: var(--azul-gov);
@@ -274,13 +327,9 @@ CSS = f"""
   [data-testid="stDataFrame"] .row-header {{
     color: var(--texto) !important; font-weight: 600 !important;
   }}
-  .glideDataEditor {{ --gdg-text-header: {PALETA['texto']};
-                      --gdg-text-dark: {PALETA['texto']};
-                      --gdg-text-medium: {PALETA['texto']};
-                      --gdg-text-light: {PALETA['gris_texto']};
-                      --gdg-bg-header: {PALETA['gris_fondo']};
-                      --gdg-header-font-style: 700 13px;
-                      --gdg-font-family: Roboto, "Segoe UI", sans-serif; }}
+  /* El color de encabezados e indices de la rejilla NO se controla desde
+     aqui: se dibuja en un canvas cuyo tema arma Streamlit. Se configura en
+     .streamlit/config.toml con dataframeHeaderBackgroundColor. */
 
   /* ---------- barra lateral, en azules ---------- */
   section[data-testid="stSidebar"] {{
@@ -327,6 +376,6 @@ CSS = f"""
 OCULTAR_LATERAL = """
 <style>
   section[data-testid="stSidebar"] {display: none !important;}
-  div[data-testid="stSidebarCollapsedControl"] {display: none !important;}
+  [data-testid="stExpandSidebarButton"] {display: none !important;}
 </style>
 """
