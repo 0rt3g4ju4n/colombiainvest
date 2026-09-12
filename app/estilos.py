@@ -36,8 +36,8 @@ MARGEN = "2.5rem"
 
 # Altos de la cabecera fija. Se usan para reservar espacio en el contenido
 # y en el panel lateral, de modo que la barra superior nunca los tape.
-ALTO_BARRA = "121px"      # barra azul mas la franja (medido en navegador)
-ALTO_CABECERA = "178px"   # barra azul, franja y navegacion
+ALTO_BARRA = "133px"      # barra azul mas la franja (medido en navegador)
+ALTO_CABECERA = "202px"   # barra azul, franja y navegacion (medido)
 
 
 def color_score(valor: float) -> str:
@@ -201,12 +201,12 @@ CSS = f"""
   .ci-barra {{
     background: var(--azul-gov);
     color: #fff;
-    padding: 30px var(--margen) 28px var(--margen);
+    padding: 34px var(--margen) 32px var(--margen);
     display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
     font-family: Roboto, "Segoe UI", sans-serif;
   }}
-  .ci-barra .marca {{ font-size: 2.15rem; font-weight: 800; letter-spacing: -0.5px; }}
-  .ci-barra .lema {{ font-size: 1.05rem; opacity: 0.95; }}
+  .ci-barra .marca {{ font-size: 2.3rem; font-weight: 800; letter-spacing: -0.5px; }}
+  .ci-barra .lema {{ font-size: 1.1rem; opacity: 0.95; }}
   /* Franja en azules. Se retiro el naranja: era el unico color calido del
      tablero y quedaba suelto frente al resto de la paleta. */
   .ci-franja {{
@@ -227,15 +227,19 @@ CSS = f"""
   .st-key-cinav [data-baseweb="button-group"] button {{
     background: transparent !important;
     border: none !important;
-    border-bottom: 3px solid transparent !important;
+    border-bottom: 4px solid transparent !important;
     border-radius: 0 !important;
-    padding: 12px 20px 13px 20px !important;
+    padding: 17px 28px 18px 28px !important;
+    /* Streamlit fija el alto del boton y recorta lo que sobra, de modo que
+       el relleno vertical no surtia efecto. Se libera el alto. */
+    height: auto !important; min-height: 0 !important;
+    overflow: visible !important;
     color: var(--gris-texto) !important;
     box-shadow: none !important;
     transition: all .12s ease;
   }}
   .st-key-cinav button p {{
-    font-size: 1.02rem !important; font-weight: 600 !important;
+    font-size: 1.12rem !important; font-weight: 600 !important;
     color: inherit !important; margin: 0 !important;
   }}
   .st-key-cinav button:hover {{
