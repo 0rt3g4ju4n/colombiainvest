@@ -214,30 +214,43 @@ CSS = f"""
     background: linear-gradient(90deg,
       var(--azul-profundo) 0 34%, var(--azul-gov) 34% 67%, var(--azul-claro) 67% 100%);
   }}
-  .st-key-cinav div[role="radiogroup"] {{
-    flex-direction: row; gap: 2px; flex-wrap: nowrap; margin-bottom: -2px;
-    overflow-x: auto;
+  /* ---------- navegacion superior ----------
+     Control segmentado presentado como barra de pestanas: sin recuadro ni
+     relleno, con la seccion activa marcada por subrayado azul. Antes era un
+     radio al que habia que esconderle el circulo con CSS apuntando a un hijo
+     interno del widget, un parche fragil. */
+  .st-key-cinav [data-baseweb="button-group"] {{
+    gap: 2px; flex-wrap: wrap; margin-bottom: -2px;
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; padding: 0 !important;
   }}
-  .st-key-cinav div[role="radiogroup"] > label {{
-    background: transparent; border: none;
-    border-bottom: 3px solid transparent;
-    padding: 12px 20px 13px 20px; margin: 0;
-    font-weight: 600; cursor: pointer; transition: all .12s ease;
+  .st-key-cinav [data-baseweb="button-group"] button {{
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 3px solid transparent !important;
+    border-radius: 0 !important;
+    padding: 12px 20px 13px 20px !important;
+    color: var(--gris-texto) !important;
+    box-shadow: none !important;
+    transition: all .12s ease;
   }}
-  .st-key-cinav div[role="radiogroup"] > label > div:first-child {{
-    display: none !important;
+  .st-key-cinav button p {{
+    font-size: 1.02rem !important; font-weight: 600 !important;
+    color: inherit !important; margin: 0 !important;
   }}
-  .st-key-cinav div[role="radiogroup"] > label p {{
-    font-size: 1.02rem; font-weight: 600; color: var(--gris-texto);
-    transition: color .12s ease;
+  .st-key-cinav button:hover {{
+    background: rgba(11,78,200,.06) !important;
+    color: var(--azul-gov) !important;
   }}
-  .st-key-cinav div[role="radiogroup"] > label:hover {{ background: rgba(11,78,200,.06); }}
-  .st-key-cinav div[role="radiogroup"] > label:hover p {{ color: var(--azul-gov); }}
-  .st-key-cinav div[role="radiogroup"] > label:has(input:checked) {{
-    border-bottom-color: var(--azul-gov);
+  /* Streamlit marca la opcion activa con kind="segmented_controlActive".
+     No usa aria-checked ni aria-pressed: se verifico en el navegador. */
+  .st-key-cinav button[kind="segmented_controlActive"] {{
+    color: var(--azul-gov) !important;
+    border-bottom-color: var(--azul-gov) !important;
+    background: transparent !important;
   }}
-  .st-key-cinav div[role="radiogroup"] > label:has(input:checked) p {{
-    color: var(--azul-gov); font-weight: 700;
+  .st-key-cinav button[kind="segmented_controlActive"] p {{
+    color: var(--azul-gov) !important; font-weight: 700 !important;
   }}
 
   /* ---------- tarjeta de proyecto ---------- */

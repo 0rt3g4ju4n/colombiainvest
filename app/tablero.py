@@ -113,11 +113,17 @@ with st.container(key="cihead"):
         '</div><div class="ci-franja"></div>',
         unsafe_allow_html=True,
     )
-# st.container(key=...) genera la clase CSS st-key-cinav, que es lo que
-# permite estilar solo esta barra sin tocar los demas radios de la app.
+# Se usa segmented_control y no radio: el radio dibuja un circulo por opcion
+# que habia que esconder con CSS apuntando a un hijo interno del widget, un
+# parche fragil que cualquier cambio de Streamlit podia romper. El control
+# segmentado no tiene circulo, es el widget pensado para elegir una seccion.
+# required=True impide que el usuario deseleccione y quede sin seccion.
 with st.container(key="cinav"):
-    seccion = st.radio("Navegacion", SECCIONES, horizontal=True,
-                       label_visibility="collapsed")
+    seccion = st.segmented_control(
+        "Navegacion", SECCIONES, default=SECCIONES[0],
+        selection_mode="single", required=True,
+        label_visibility="collapsed",
+    ) or SECCIONES[0]
 
 # ---------------------------------------------------------------------------
 # Ponderacion. La barra lateral solo existe donde hay algo que filtrar o
