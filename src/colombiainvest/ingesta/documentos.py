@@ -22,10 +22,41 @@ from __future__ import annotations
 import json
 import logging
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any, Dict, List
 
 log = logging.getLogger(__name__)
+
+def norm(s: str) -> str:
+    s = unicodedata.normalize("NFKD", str(s))
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(s.upper().split()).strip(" .")
+
+
+# Puente entre el sector del SUIFP y el nombre del sector en el informe.
+PUENTE_SECTOR = {
+    "AMBIENTE Y DESARROLLO SOSTENIBLE": "AMBIENTE Y DESARROLLO SOSTENIBLE",
+    "VIVIENDA, CIUDAD Y TERRITORIO": "VIVIENDA CIUDAD Y TERRITORIO",
+    "MINAS Y ENERGIA": "MINAS Y ENERGIA",
+    "INCLUSION SOCIAL Y RECONCILIACION": "INCLUSION SOCIAL",
+    "EDUCACION": "EDUCACION",
+    "SALUD Y PROTECCION SOCIAL": "SALUD Y PROTECCION SOCIAL",
+    "CULTURA": "CULTURA",
+    "DEPORTE Y RECREACION": "DEPORTE",
+    "COMERCIO, INDUSTRIA Y TURISMO": "COMERCIO INDUSTRIA Y TURISMO",
+    "TRABAJO": "TRABAJO",
+    "CIENCIA, TECNOLOGIA E INNOVACION": "CIENCIA TECNOLOGIA E INNOVACION",
+    "AGRICULTURA Y DESARROLLO RURAL": "AGRICULTURA Y DESARROLLO RURAL",
+    "TRANSPORTE": "TRANSPORTE",
+    "GOBIERNO TERRITORIAL": "GOBIERNO TERRITORIAL",
+    "INFORMACION ESTADISTICA": "INFORMACION ESTADISTICA",
+    "TECNOLOGIAS DE LA INFORMACION Y LAS COMUNICACIONES":
+        "TECNOLOGIA DE LA INFORMACION Y LA COMUNICACION",
+    "JUSTICIA Y DEL DERECHO": "JUSTICIA Y DEL DERECHO",
+    "ORGANISMOS DE CONTROL": "ORGANISMOS DE CONTROL",
+}
+
 
 RE_BPIN = re.compile(r"20\d{2}2512[26]0\d{3}")
 

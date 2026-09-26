@@ -116,6 +116,36 @@ class ConfigModelo:
         return self.bruto["normalizacion"]
 
     @property
+    def agregacion(self) -> Dict[str, Any]:
+        """Metodo de agregacion entre dimensiones y su piso."""
+        a = self.bruto.get("agregacion", {})
+        return {"metodo": str(a.get("metodo", "aritmetica")),
+                "piso": float(a.get("piso", 1.0))}
+
+    @property
+    def universo(self) -> Dict[str, Any]:
+        u = self.bruto.get("universo", {})
+        return {"subestados_previos": list(u.get("subestados_previos", [])),
+                "avance_terminado": float(u.get("avance_terminado", 100))}
+
+    @property
+    def faltantes(self) -> Dict[str, Any]:
+        f = self.bruto.get("faltantes", {})
+        return {"max_por_variable": float(f.get("max_por_variable", 1.0)),
+                "max_por_proyecto": float(f.get("max_por_proyecto", 1.0)),
+                "etiqueta_insuficiente": str(f.get("etiqueta_insuficiente",
+                                                   "Informacion insuficiente"))}
+
+    @property
+    def montecarlo(self) -> Dict[str, Any]:
+        m = self.bruto.get("montecarlo", {})
+        return {"distribucion": str(m.get("distribucion", "dirichlet")),
+                "concentracion": float(m.get("concentracion", 100)),
+                "iteraciones": int(m.get("iteraciones", 10000)),
+                "bins_sensibilidad": int(m.get("bins_sensibilidad", 20)),
+                "umbral_spearman": float(m.get("umbral_spearman", 0.85))}
+
+    @property
     def mapeos(self) -> Dict[str, Any]:
         return self.bruto["mapeos"]
 
@@ -157,10 +187,50 @@ class ConfigModelo:
         if metodo not in validos:
             raise ValueError(f"Metodo de normalizacion '{metodo}' invalido. Use {validos}")
 
+        imput = self.normalizacion.get("imputacion_faltantes", "mediana")
+        if imput not in {"reponderar", "mediana", "cero"}:
+            raise ValueError(f"imputacion_faltantes '{imput}' invalida")
+
+        agr = self.agregacion
+        if agr["metodo"] not in {"geometrica", "aritmetica"}:
+            raise ValueError(f"Agregacion '{agr['metodo']}' invalida. Use geometrica o aritmetica")
+        if not 0 < agr["piso"] < 100:
+            raise ValueError("El piso de la agregacion geometrica debe estar entre 0 y 100")
+
+        falt = self.faltantes
+        for clave in ("max_por_variable", "max_por_proyecto"):
+            if not 0 <= falt[clave] <= 1:
+                raise ValueError(f"faltantes.{clave} debe estar entre 0 y 1")
+
+        mc = self.montecarlo
+        if mc["distribucion"] not in {"dirichlet", "normal"}:
+            raise ValueError("montecarlo.distribucion debe ser dirichlet o normal")
+        if mc["concentracion"] <= 0:
+            raise ValueError("montecarlo.concentracion debe ser positiva")
+
 
 def cargar_fuentes(ruta: Path | None = None) -> ConfigFuentes:
     return ConfigFuentes(_leer_yaml(ruta or DIR_CONFIG / "fuentes.yaml"))
 
 
-def cargar_modelo(ruta: Path | None = None) -> ConfigModelo:
-    return ConfigModelo(_leer_yaml(ruta or DIR_CONFIG / "pesos.yaml"))
+RUTA_PESOS_PANEL = DIR_CONFIG / "pesos_panel.yaml"
+
+
+def cargar_modelo(ruta: Path | None = None,
+                  ruta_panel: Path | None = RUTA_PESOS_PANEL) -> ConfigModelo:
+    """Carga pesos.yaml y, si existe, el esquema que produjo el panel.
+
+    El panel de expertos escribe config/pesos_panel.yaml. Se agrega como
+    esquema alternativo 'panel_expertos' y no reemplaza al base: promoverlo
+    a esquema base es una decision del grupo que se toma editando pesos.yaml.
+    """
+    bruto = _leer_yaml(ruta or DIR_CONFIG / "pesos.yaml")
+    if ruta_panel is not None and Path(ruta_panel).exists():
+        panel = _leer_yaml(Path(ruta_panel))
+        esquema = panel.get("esquema") if panel else None
+        if esquema:
+            bruto.setdefault("esquemas_alternativos", {})["panel_expertos"] = {
+                "descripcion": panel.get("descripcion", "Pesos del panel de expertos (AHP)"),
+                **{d: float(esquema[d]) for d in DIMENSIONES},
+            }
+    return ConfigModelo(bruto)

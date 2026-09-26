@@ -8,13 +8,15 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from colombiainvest.config import cargar_fuentes  # noqa: E402
+from colombiainvest.config import DIR_CRUDOS, cargar_fuentes  # noqa: E402
 from colombiainvest.ingesta.dnp import ingesta_completa, ingesta_secop  # noqa: E402
 
 
@@ -41,6 +43,13 @@ def main() -> int:
         n = ingesta_secop(cfg)
         print(f"  {'secop':<16} {n:>8,} contratos")
 
+    # Fecha de corte: la direccion exige que cada calificacion exponga la
+    # fecha de los datos que la producen. Se registra al descargar.
+    corte = {"fecha_corte": datetime.now().strftime("%Y-%m-%d"),
+             "fuente": "SUIFP, DNP, via datos.gov.co", "registros": resumen}
+    with open(DIR_CRUDOS / "corte.json", "w", encoding="utf-8") as f:
+        json.dump(corte, f, ensure_ascii=False, indent=2)
+    print(f"\n  Fecha de corte registrada: {corte['fecha_corte']}")
     return 0
 
 

@@ -2,9 +2,23 @@
 # Los pesos NUNCA van incrustados en el codigo. Este archivo es la unica
 # fuente de verdad y es el insumo que se lleva a las entrevistas con expertos.
 
-version: "0.1.0-partida"
-fecha: "2026-09-11"
+version: "0.2.0-revision-direccion"
+fecha: "2026-09-25"
 origen_pesos: "juicio experto del equipo, pendiente de validacion con expertos"
+# CAMBIOS 0.2.0, tras la evaluacion de direccion (hallazgo C5 y v3 ajustada):
+#   - completitud_ficha sale del score y queda como metadato visible.
+#   - faltantes: regla de exclusion 30 % por variable y 40 % por proyecto.
+#   - agregacion entre dimensiones por media geometrica ponderada.
+#   - winsorizacion en p5 y p95.
+#   - Monte Carlo con distribucion de Dirichlet e indices de primer orden.
+#   - salen dos variables redundantes entre dimensiones (Spearman > 0,9):
+#     inversion_relativa y diversificacion_fuentes.
+#   - universo: el score usa los 491 evaluables; la vista de oportunidades
+#     muestra los vigentes y los inactivos pasan a 'Proyectos previos'.
+#   - nueva variable de atractivo: vinculacion_privada, por tipo de
+#     intervencion (obra fisica frente a programa de funcionamiento).
+# Los pesos entre dimensiones NO cambian: los define el panel de expertos
+# con el proceso analitico jerarquico (scripts/05_panel_expertos.py).
 
 # ---------------------------------------------------------------------------
 # ESQUEMA BASE. Es el punto de partida, no el resultado final.
@@ -75,20 +89,25 @@ perfiles_inversionista:
 # ---------------------------------------------------------------------------
 variables:
   viabilidad_financiera:
+    # CORRECCION 2026-09-25 (analisis multivariado): 'diversificacion_fuentes'
+    # sale del score. Correlacion de Spearman 0,924 con 'cofinanciacion_externa'
+    # (atractivo inversor): tener mas de una fuente equivale casi siempre a
+    # tener una fuente externa, y la misma senal pesaba en dos dimensiones.
+    # Su 0.15 se reparte en proporcion a los pesos restantes (sobre 0.85).
     ratio_obligacion:
-      peso: 0.30
+      peso: 0.35
       sentido: 1
     ratio_pago:
-      peso: 0.20
+      peso: 0.24
       sentido: 1
     continuidad_presupuestal:
-      peso: 0.20
+      peso: 0.24
       sentido: 1
     diversificacion_fuentes:
-      peso: 0.15
+      peso: 0.0
       sentido: 1
     brecha_fisico_financiero:
-      peso: 0.15
+      peso: 0.17
       sentido: -1
 
   madurez_ejecucion:
@@ -110,17 +129,24 @@ variables:
     # totalbeneficiario diligenciado en el 100% de los 643 proyectos
     # (mediana 70.749). La tabla iuc2-3r6h lo trae en cero, esa fue la
     # confusion inicial. La dimension deja de ser proxy puro.
-    # LIMITACION: 108 proyectos declaran mas beneficiarios que habitantes
-    # del municipio. Es cifra declarada en la MGA, no verificada. Por eso
-    # se usa como cobertura poblacional relativa con tope, no como conteo.
+    # LIMITACION: 190 de los 491 evaluables declaran mas beneficiarios que
+    # habitantes del municipio. Es cifra declarada en la MGA, no verificada.
+    # Por eso se usa como cobertura poblacional relativa con tope, no como
+    # conteo.
+    #
+    # CORRECCION 2026-09-25 (analisis multivariado): 'inversion_relativa' sale
+    # del score. Correlacion de Spearman 0,991 con 'escala_proyecto'
+    # (atractivo inversor): con dos municipios, dividir el monto por la
+    # poblacion solo lo reescala, y el tamano del proyecto pesaba dos veces.
+    # Su 0.25 se reparte en proporcion a los pesos restantes (sobre 0.75).
     beneficiarios_directos:
-      peso: 0.40
+      peso: 0.53
       sentido: 1
     prioridad_sectorial:
-      peso: 0.35
+      peso: 0.47
       sentido: 1
     inversion_relativa:
-      peso: 0.25
+      peso: 0.0
       sentido: 1
 
   gobernanza:
@@ -129,28 +155,44 @@ variables:
     # es decir, peso decorativo sin capacidad de discriminar. Se sustituye
     # por 'cobertura_reporte', que mide si el proyecto reporta apropiacion a
     # lo largo de su horizonte declarado o solo en vigencias sueltas.
+    #
+    # CORRECCION 2026-09-25 (revision de direccion): 'completitud_ficha' sale
+    # del score. La direccion exige que la completitud se reporte como
+    # metadato separado y nunca embebida en la calificacion, para no
+    # confundir una nota baja por falta de datos con una nota baja por
+    # desempeno. Se deja con peso 0 (apagada, no borrada) y su 0.25 se
+    # reparte en proporcion a los pesos restantes (0.25/0.30/0.20 sobre 0.75).
     completitud_ficha:
-      peso: 0.25
+      peso: 0.0
       sentido: 1
     cobertura_reporte:
-      peso: 0.25
+      peso: 0.33
       sentido: 1
     reporta_seguimiento:
-      peso: 0.30
+      peso: 0.40
       sentido: 1
     consistencia_financiera:
-      peso: 0.20
+      peso: 0.27
       sentido: 1
 
   atractivo_inversor:
+    # NUEVA 2026-09-25: 'vinculacion_privada'. Sin ella, ninguna variable
+    # media si el proyecto admite capital privado: entre los vigentes, los
+    # programas de operacion (aseguramiento en salud, vigilancia sanitaria)
+    # promediaban 59,2 y las obras de inversion en capital 45,8, aunque son
+    # las obras las que se pueden cofinanciar (obras por impuestos, APP).
+    # Recibe 0.30 y los demas pesos se reducen en proporcion (x 0.70).
     escala_proyecto:
-      peso: 0.40
+      peso: 0.28
       sentido: 1
     sector_financiable:
-      peso: 0.35
+      peso: 0.24
       sentido: 1
     cofinanciacion_externa:
-      peso: 0.25
+      peso: 0.18
+      sentido: 1
+    vinculacion_privada:
+      peso: 0.30
       sentido: 1
 
 # ---------------------------------------------------------------------------
@@ -159,13 +201,79 @@ variables:
 # de pesos en SECOP (maximo 2.582 billones, mediana 24,6 millones). Min-max
 # crudo es inviable con esa cola. Por defecto se winsoriza antes de escalar.
 # ---------------------------------------------------------------------------
+#
+# La normalizacion es GLOBAL, sobre todo el universo evaluable. La v3 de
+# direccion proponia normalizar dentro de cada estrato municipio-sector; se
+# descarto con evidencia: de 45 estratos, 3 tienen un solo proyecto (min-max
+# indefinido) y 18 tienen cinco o menos. Ademas, normalizar por estrato hace
+# que el score mida la posicion frente a los pares del estrato, y deja de ser
+# comparable entre sectores. La posicion dentro del sector se reporta aparte,
+# como percentil, fuera del score.
+#
+# Percentiles p5 y p95 segun la especificacion de direccion. El valor
+# anterior (p1 y p99) se conserva como variante en el analisis de robustez.
+# ---------------------------------------------------------------------------
 normalizacion:
   metodo: "minmax"
   winsorizar: true
-  percentil_inferior: 0.01
-  percentil_superior: 0.99
+  percentil_inferior: 0.05
+  percentil_superior: 0.95
   log_montos: true
-  imputacion_faltantes: "mediana"
+  # reponderar: si a un proyecto le falta una variable, su dimension se
+  #   calcula con las variables disponibles, renormalizando sus pesos. No se
+  #   inventa un valor. Es el tratamiento por defecto.
+  # mediana: imputa la mediana del universo. Se conserva como variante.
+  imputacion_faltantes: "reponderar"
+
+# ---------------------------------------------------------------------------
+# UNIVERSO. El score se calcula sobre todos los proyectos evaluables: la base
+# de comparacion amplia (491) hace mas estable la normalizacion que usar
+# solo los vigentes (172). La vista de oportunidades muestra los vigentes; los
+# proyectos con estos subestados van a la seccion 'Proyectos previos', con su
+# situacion real (terminado, avance parcial o sin avance), no como completados.
+# ---------------------------------------------------------------------------
+universo:
+  subestados_previos: ["Inactivo"]
+  avance_terminado: 100
+
+# ---------------------------------------------------------------------------
+# DATOS FALTANTES. Regla de la especificacion de direccion (manual OCDE-JRC).
+# Un cero se trata como faltante SOLO cuando es imposible o cuando otra tabla
+# del propio SUIFP lo contradice (ver procesamiento/variables.py). Un cero
+# coherente con el resto de la informacion se trata como dato real.
+# ---------------------------------------------------------------------------
+faltantes:
+  max_por_variable: 0.30     # variable con mas faltantes se descarta
+  max_por_proyecto: 0.40     # proyecto con mas faltantes no se califica
+  etiqueta_insuficiente: "Informacion insuficiente"
+
+# ---------------------------------------------------------------------------
+# AGREGACION ENTRE DIMENSIONES.
+# geometrica: media geometrica ponderada. Limita la compensacion: una
+#   gobernanza muy baja no se compensa del todo con un impacto alto.
+# aritmetica: suma ponderada. Se conserva como variante de robustez.
+# piso: la media geometrica vale cero si una dimension vale cero. Para que un
+#   solo cero no anule el resto, las dimensiones se llevan de [0,100] a
+#   [piso,100] antes de agregar, y el resultado se devuelve a [0,100].
+# ---------------------------------------------------------------------------
+agregacion:
+  metodo: "geometrica"
+  piso: 1.0
+
+# ---------------------------------------------------------------------------
+# ANALISIS DE INCERTIDUMBRE SOBRE LOS PESOS.
+# Dirichlet centrada en el esquema de referencia. La concentracion controla
+# la dispersion: con 100, un peso de 0.25 varia con desviacion de 0.043
+# (17 % relativo) y uno de 0.10 con desviacion de 0.030 (30 % relativo).
+# Cuando exista el panel, la concentracion puede estimarse de la dispersion
+# entre expertos (lo reporta scripts/05_panel_expertos.py).
+# ---------------------------------------------------------------------------
+montecarlo:
+  distribucion: "dirichlet"
+  concentracion: 100
+  iteraciones: 10000
+  bins_sensibilidad: 20
+  umbral_spearman: 0.85      # criterio de aceptacion de direccion
 
 # ---------------------------------------------------------------------------
 # MAPEOS DE JUICIO EXPERTO. Se llevan a las entrevistas junto con los pesos.
@@ -226,6 +334,20 @@ mapeos:
     "Inactivo (PGN, Territorio)": 0.15
     "No viable": 0.00
     "_defecto": 0.30
+
+  # Viabilidad de vincular capital privado segun el tipo de intervencion
+  # (procesamiento/variables.py, clasificar_intervencion). Juicio experto
+  # preliminar: el panel lo valida en la Parte C del instrumento.
+  #   obra fisica: obras por impuestos (Ley 1819 de 2016), APP (Ley 1508 de 2012)
+  #   programas y funcionamiento: poco espacio para capital privado
+  vinculacion_privada:
+    "Inversion en capital": 1.00
+    "Mejoramiento": 0.80
+    "Mantenimiento": 0.60
+    "Preinversion": 0.50
+    "Implementacion de programa": 0.30
+    "Fortalecimiento institucional": 0.20
+    "_defecto": 0.40
 
   fuentes_externas:
     - "Presupuesto General de la Nacion"

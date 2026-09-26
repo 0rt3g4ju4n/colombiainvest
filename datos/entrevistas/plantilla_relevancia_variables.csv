@@ -1,0 +1,17 @@
+﻿experto;dimension;variable;nombre;relevancia
+E01;viabilidad_financiera;ratio_obligacion;Obligacion sobre apropiacion;
+E01;viabilidad_financiera;ratio_pago;Pago sobre obligacion;
+E01;viabilidad_financiera;continuidad_presupuestal;Continuidad presupuestal;
+E01;viabilidad_financiera;brecha_fisico_financiero;Brecha fisico financiera;
+E01;madurez_ejecucion;avance_fisico;Avance fisico;
+E01;madurez_ejecucion;estado_proyecto;Estado del proyecto;
+E01;madurez_ejecucion;vigencias_ejecutadas;Vigencias ejecutadas;
+E01;madurez_ejecucion;estabilidad_apropiacion;Variabilidad de la apropiacion;
+E01;impacto_social;beneficiarios_directos;Cobertura poblacional;
+E01;impacto_social;prioridad_sectorial;Prioridad social del sector;
+E01;gobernanza;cobertura_reporte;Cobertura del reporte;
+E01;gobernanza;reporta_seguimiento;Reporta seguimiento;
+E01;atractivo_inversor;escala_proyecto;Escala del proyecto;
+E01;atractivo_inversor;sector_financiable;Sector financiable;
+E01;atractivo_inversor;cofinanciacion_externa;Cofinanciacion externa;
+E01;atractivo_inversor;vinculacion_privada;Vinculacion de capital privado;

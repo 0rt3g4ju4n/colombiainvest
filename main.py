@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 import runpy
 import subprocess
 import sys
@@ -97,7 +98,33 @@ def ejecutar_script(nombre: str, argumentos: list[str] | None = None) -> None:
         sys.argv = argv_original
 
 
+def datos_desactualizados() -> bool:
+    """True si los datos procesados vienen de una version anterior del modelo.
+
+    La version 0.2.0 agrego columnas (grupo del universo, situacion, marcas de
+    faltantes). Con datos viejos el tablero fallaria, asi que se recalculan
+    los pasos 2 a 4 sin volver a descargar.
+    """
+    try:
+        import pyarrow.parquet as pq
+        columnas = set(pq.read_schema(MARCA_DATOS).names)
+    except Exception:
+        return True
+    return not {"grupo_universo", "situacion", "dato_ficha_financiera_vacia"} <= columnas
+
+
 def preparar_datos(reconstruir: bool) -> None:
+    if MARCA_DATOS.exists() and not reconstruir and datos_desactualizados():
+        aviso("Los datos procesados son de una version anterior del modelo.\n"
+              "Se recalculan sin volver a descargar. Toma unos segundos.")
+        ejecutar_script("02_dataset.py")
+        ejecutar_script("03_score.py")
+        try:
+            ejecutar_script("04_documentos.py")
+        except Exception as e:
+            print(f"No se pudo procesar los documentos municipales: {e}")
+        return
+
     if MARCA_DATOS.exists() and not reconstruir:
         print(f"Datos listos en {MARCA_DATOS.parent}")
         if not MARCA_DOCS.exists():
@@ -135,6 +162,10 @@ def lanzar_tablero(puerto: int) -> int:
     aviso(f"Abriendo el tablero en http://localhost:{puerto}\n"
           "Para detenerlo, presione Ctrl+C en esta consola.")
     abrir_navegador(puerto)
+    # Streamlit lee el tema de .streamlit/config.toml en la carpeta de
+    # trabajo. Si VS Code ejecuta main.py desde la carpeta padre del
+    # proyecto, el tema se pierde; por eso se fija aqui.
+    os.chdir(RAIZ)
     sys.argv = [
         "streamlit", "run", str(APP),
         "--server.port", str(puerto),

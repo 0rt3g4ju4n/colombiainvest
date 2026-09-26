@@ -20,6 +20,8 @@ sys.path.insert(0, str(RAIZ / "src"))
 from colombiainvest.config import DIMENSIONES, ConfigModelo, cargar_modelo  # noqa: E402
 from colombiainvest.modelo.score import aplicar_esquema, calcular_dimensiones, calificar  # noqa: E402
 from colombiainvest.modelo.sensibilidad import comparar_esquemas, perturbacion_montecarlo  # noqa: E402
+
+ARITMETICA = {"metodo": "aritmetica", "piso": 1.0}
 from colombiainvest.procesamiento.normalizacion import normalizar_variable, winsorizar  # noqa: E402
 from colombiainvest.procesamiento.variables import _anios_horizonte, mapear, sin_tildes  # noqa: E402
 
@@ -173,13 +175,13 @@ def test_esquema_que_no_suma_uno_es_rechazado(datos_sinteticos, cfg) -> None:
     puntajes, _ = calcular_dimensiones(datos_sinteticos, cfg)
     malo = {d: 0.5 for d in DIMENSIONES}
     with pytest.raises(ValueError, match="suma"):
-        aplicar_esquema(puntajes, malo)
+        aplicar_esquema(puntajes, malo, cfg.agregacion)
 
 
 def test_esquema_incompleto_es_rechazado(datos_sinteticos, cfg) -> None:
     puntajes, _ = calcular_dimensiones(datos_sinteticos, cfg)
     with pytest.raises(ValueError, match="no cubre"):
-        aplicar_esquema(puntajes, {"gobernanza": 1.0})
+        aplicar_esquema(puntajes, {"gobernanza": 1.0}, cfg.agregacion)
 
 
 def test_reproducibilidad(datos_sinteticos, cfg) -> None:
@@ -200,32 +202,61 @@ def test_perfiles_bloqueados_si_no_estan_habilitados(datos_sinteticos, cfg) -> N
 # ---------------------------------------------------------------------------
 def test_comparacion_de_esquemas(datos_sinteticos, cfg) -> None:
     metricas, rankings = comparar_esquemas(datos_sinteticos, cfg)
-    assert len(metricas) == len(cfg.esquemas_disponibles) - 1
+    # todos los alternativos declarados mas el esquema por entropia
+    assert len(metricas) == len(cfg.esquemas_disponibles)
+    assert "entropia" in set(metricas["esquema"])
     assert metricas["spearman"].between(-1, 1).all()
     assert metricas["top10_estable"].between(0, 1).all()
 
 
 def test_montecarlo_reproducible(datos_sinteticos, cfg) -> None:
-    r1, p1 = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=50, semilla=SEMILLA)
-    r2, p2 = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=50, semilla=SEMILLA)
+    r1, p1, s1 = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=50, semilla=SEMILLA)
+    r2, p2, s2 = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=50, semilla=SEMILLA)
     pd.testing.assert_frame_equal(r1, r2)
     pd.testing.assert_frame_equal(p1, p2)
+    pd.testing.assert_frame_equal(s1, s2)
 
 
 def test_ruido_cero_no_altera_el_ranking(datos_sinteticos, cfg) -> None:
-    _, por_proyecto = perturbacion_montecarlo(
-        datos_sinteticos, cfg, n_simulaciones=20, ruido=0.0, semilla=SEMILLA
+    _, por_proyecto, _ = perturbacion_montecarlo(
+        datos_sinteticos, cfg, n_simulaciones=20, ruido=0.0, semilla=SEMILLA,
+        distribucion="normal",
     )
     assert (por_proyecto["rank_base"] == por_proyecto["rank_medio"]).all()
     assert (por_proyecto["amplitud_ic90"] == 0).all()
 
 
 def test_mas_ruido_produce_menos_estabilidad(datos_sinteticos, cfg) -> None:
-    bajo, _ = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=200,
-                                      ruido=0.05, semilla=SEMILLA)
-    alto, _ = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=200,
-                                      ruido=0.60, semilla=SEMILLA)
+    bajo, _, _ = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=200,
+                                         ruido=0.05, semilla=SEMILLA, distribucion="normal")
+    alto, _, _ = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=200,
+                                         ruido=0.60, semilla=SEMILLA, distribucion="normal")
     assert bajo["spearman_medio"].iat[0] > alto["spearman_medio"].iat[0]
+
+
+def test_dirichlet_mas_concentrada_es_mas_estable(datos_sinteticos, cfg) -> None:
+    """La concentracion de la Dirichlet es la inversa de la incertidumbre."""
+    disperso, _, _ = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=300,
+                                             semilla=SEMILLA, concentracion=5)
+    concentrado, _, _ = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=300,
+                                                semilla=SEMILLA, concentracion=5000)
+    assert concentrado["spearman_medio"].iat[0] > disperso["spearman_medio"].iat[0]
+    assert concentrado["desplaz_medio_abs"].iat[0] < disperso["desplaz_medio_abs"].iat[0]
+
+
+def test_indices_primer_orden(datos_sinteticos, cfg) -> None:
+    _, _, primer = perturbacion_montecarlo(datos_sinteticos, cfg, n_simulaciones=2000,
+                                           semilla=SEMILLA)
+    assert set(primer["dimension"]) == set(DIMENSIONES)
+    assert primer["indice_primer_orden"].between(0, 1).all()
+    assert primer["indice_primer_orden"].sum() <= 1.05
+
+
+def test_pesos_entropia_suman_uno(datos_sinteticos, cfg) -> None:
+    from colombiainvest.modelo.sensibilidad import pesos_entropia
+    puntajes, _ = calcular_dimensiones(datos_sinteticos, cfg)
+    w = pesos_entropia(puntajes)
+    assert abs(sum(w.values()) - 1) < 1e-9 and min(w.values()) >= 0
 
 
 # ---------------------------------------------------------------------------

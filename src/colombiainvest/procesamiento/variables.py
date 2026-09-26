@@ -84,52 +84,51 @@ def _div(a: float, b: float, defecto: float = 0.0) -> float:
 # Es la unica senal de texto con distribucion util: el campo objetivogeneral
 # viene truncado a 249 caracteres, sin mencion de ODS y con solo 18 de 491
 # objetivos que contienen alguna cifra.
+#
+# Se compara por RAIZ de la palabra y no por palabra exacta, porque el SUIFP
+# trae tildes corruptas ("CONSTRUCCIN", "ACTUALIZACIN"): con la palabra
+# exacta, 68 proyectos quedaban como "Otro". Desde la version 0.2.0 alimenta
+# la variable 'vinculacion_privada' del atractivo inversor.
 TIPO_INTERVENCION = {
-    "CONSTRUCCION": "Inversion en capital",
-    "AMPLIACION": "Inversion en capital",
-    "ADECUACION": "Inversion en capital",
-    "CONSTRUCCIÓN": "Inversion en capital",
-    "AMPLIACIÓN": "Inversion en capital",
-    "ADQUISICION": "Inversion en capital",
-    "DOTACION": "Inversion en capital",
-    "DOTACIÓN": "Inversion en capital",
-    "MEJORAMIENTO": "Mejoramiento",
-    "OPTIMIZACION": "Mejoramiento",
-    "OPTIMIZACIÓN": "Mejoramiento",
-    "ACTUALIZACION": "Mejoramiento",
-    "ACTUALIZACIÓN": "Mejoramiento",
-    "MODERNIZACION": "Mejoramiento",
-    "MANTENIMIENTO": "Mantenimiento",
-    "CONSERVACION": "Mantenimiento",
-    "CONSERVACIÓN": "Mantenimiento",
-    "PROTECCION": "Mantenimiento",
-    "PROTECCIÓN": "Mantenimiento",
-    "FORTALECIMIENTO": "Fortalecimiento institucional",
-    "APOYO": "Fortalecimiento institucional",
-    "DESARROLLO": "Fortalecimiento institucional",
-    "GENERACION": "Fortalecimiento institucional",
-    "GENERACIÓN": "Fortalecimiento institucional",
-    "IMPLEMENTACION": "Implementacion de programa",
-    "IMPLEMENTACIÓN": "Implementacion de programa",
-    "PRESTACION": "Implementacion de programa",
-    "PRESTACIÓN": "Implementacion de programa",
-    "ESTUDIOS": "Preinversion",
-    "FORMULACION": "Preinversion",
-    "FORMULACIÓN": "Preinversion",
-    "DIAGNOSTICO": "Preinversion",
+    "Inversion en capital": ("CONSTRUC", "AMPLIAC", "ADECUAC", "ADQUISIC", "DOTAC",
+                             "REPOSIC", "INSTALAC"),
+    "Mejoramiento": ("MEJORAM", "OPTIMIZ", "ACTUALIZ", "MODERNIZ", "INCREMENT", "DEMARCAC"),
+    "Mantenimiento": ("MANTENIM", "CONSERVAC", "PROTECC", "RESTAURAC", "RECUPERAC"),
+    "Fortalecimiento institucional": ("FORTALEC", "APOYO", "DESARROLL", "GENERAC",
+                                      "CONSOLIDAC", "ADMINISTRAC", "CONTROL", "PRODUCC",
+                                      "CONFORMAC", "CONTRIBUC", "INCORPORAC"),
+    "Implementacion de programa": ("IMPLEMENT", "PRESTAC", "SERVICIO", "ASISTENC", "PREVENC",
+                                   "DIFUS", "FORMAC", "IMPLANTAC", "SUBSIDIO", "TRANSFORMAC",
+                                   "INNOVAC", "APROVECHAM", "COMPROMISO"),
+    "Preinversion": ("ESTUDIO", "FORMULAC", "DIAGNOST", "DISENO", "REVISION", "IDENTIFICAC"),
 }
+
+# Verbos iniciales que no deciden solos: "Diseno y construccion de
+# alcantarillado" es una obra y "Administracion, operacion, reposicion y
+# expansion del alumbrado publico" incluye obra. Si el nombre menciona obra
+# fisica, se clasifica como inversion en capital.
+VERBOS_AMBIGUOS = ("DISENO", "APORTES", "ADMINISTRAC", "INCREMENT")
+RAICES_OBRA = ("CONSTRUC", "AMPLIAC", "REPOSIC", "EXPANSI", "DOTAC")
 
 
 def clasificar_intervencion(nombre: Any) -> str:
     """Clasifica el proyecto por el verbo que encabeza su nombre.
 
-    Atributo descriptivo para filtrar y presentar. NO entra al score
-    mientras el grupo no lo revise.
+    Atributo descriptivo y, desde la version 0.2.0, insumo de la variable
+    'vinculacion_privada' (atractivo inversor), cuyo mapeo por tipo vive en
+    pesos.yaml y lo valida el panel de expertos.
     """
     palabras = sin_tildes(nombre).upper().split()
     if not palabras:
         return "Sin clasificar"
-    return TIPO_INTERVENCION.get(palabras[0], "Otro")
+    primera = palabras[0]
+    if primera.startswith(VERBOS_AMBIGUOS) and any(
+            p.startswith(RAICES_OBRA) for p in palabras[1:]):
+        return "Inversion en capital"
+    for tipo, raices in TIPO_INTERVENCION.items():
+        if primera.startswith(raices):
+            return tipo
+    return "Otro"
 
 
 def _anios_horizonte(valor: Any) -> float:
@@ -266,7 +265,37 @@ def construir_tabla_proyectos(
     base["completitud_ficha_v"] = base["bpin"].map(_completitud)
 
     base["municipio"] = base["municipio"].fillna(base.get("municipio_ejec"))
+    base = _asignar_municipio_por_entidad(base)
     log.info("Tabla de proyectos: %d filas, %d columnas", len(base), base.shape[1])
+    return base
+
+
+def _asignar_municipio_por_entidad(base: pd.DataFrame) -> pd.DataFrame:
+    """Usa la entidad responsable cuando la localizacion no es municipal.
+
+    La tabla de localizacion del SUIFP marca dos proyectos de Cajica con el
+    codigo 25000 ('Todo el Depto'). La entidad que los formula y ejecuta es
+    la alcaldia de Cajica, y asi lo dice el nombre del proyecto. Sin esta
+    correccion quedaban fuera del conteo por municipio y tomaban una
+    poblacion promedio en lugar de la de Cajica.
+    """
+    from ..config import cargar_fuentes
+
+    municipios = cargar_fuentes().municipios
+    por_entidad = {m["entidad_suifp"]: m for m in municipios}
+    validos = {m["divipola"] for m in municipios}
+
+    base = base.copy()
+    base["municipio_localizacion"] = base["municipio"]
+    fuera = ~base["codigomunicipio"].astype(str).isin(validos)
+    for i in base.index[fuera]:
+        m = por_entidad.get(base.at[i, "entidadresponsable"])
+        if m:
+            base.at[i, "municipio"] = m["nombre_fuente"]
+            base.at[i, "codigomunicipio"] = m["divipola"]
+    if fuera.any():
+        log.info("Municipio reasignado por entidad responsable en %d proyectos",
+                 int(fuera.sum()))
     return base
 
 
@@ -291,6 +320,23 @@ def calcular_variables(df: pd.DataFrame, cfg: ConfigModelo) -> pd.DataFrame:
     pob = pob.fillna(float(np.mean(list(poblacion.values()))) if poblacion else 1.0)
     out["poblacion_municipal"] = pob
 
+    # --- cero real frente a dato ausente -----------------------------------
+    # El SUIFP no deja campos vacios: escribe cero. Tratar todo cero como
+    # dato real castiga al proyecto por un reporte incompleto; tratarlo todo
+    # como faltante premia al que no reporta. La regla es intermedia y
+    # verificable: un cero es faltante solo si es imposible o si otra tabla
+    # del propio SUIFP lo contradice.
+    #   - Ficha financiera vacia: valor total del proyecto en cero. Ningun
+    #     proyecto cuesta cero, asi que los montos de la ficha no se usan.
+    #   - Seguimiento contradictorio: avance financiero en cero mientras la
+    #     tabla de ejecucion registra obligaciones. El seguimiento no esta
+    #     actualizado, y si ademas el avance fisico es cero, tampoco se usa.
+    out["dato_ficha_financiera_vacia"] = out["valortotalproyecto"] <= 0
+    out["dato_seguimiento_contradictorio"] = (
+        (out["avancefinanciero"] == 0) & (out["valor_obligado_total"] > 0)
+    )
+    fisico_ausente = out["dato_seguimiento_contradictorio"] & (out["avancefisico"] == 0)
+
     # --- viabilidad financiera -------------------------------------------
     out["ratio_obligacion"] = [
         _div(o, v) for o, v in zip(out["valor_obligado_total"], out["valor_vigente_total"])
@@ -303,10 +349,13 @@ def calcular_variables(df: pd.DataFrame, cfg: ConfigModelo) -> pd.DataFrame:
     ]
     out["continuidad_presupuestal"] = out["n_vigencias_apropiadas"]
     out["diversificacion_fuentes"] = out["n_fuentes"]
-    out["brecha_fisico_financiero"] = (out["avancefisico"] - out["avancefinanciero"]).abs()
+    out["brecha_fisico_financiero"] = (
+        (out["avancefisico"] - out["avancefinanciero"]).abs()
+        .where(~out["dato_seguimiento_contradictorio"])
+    )
 
     # --- madurez de ejecucion --------------------------------------------
-    out["avance_fisico"] = out["avancefisico"].clip(0, 100)
+    out["avance_fisico"] = out["avancefisico"].clip(0, 100).where(~fisico_ausente)
     # Se prefiere el subestado porque el estado es constante en el universo
     # evaluable. Si el subestado falta, se cae al estado como respaldo.
     estado_fuente = out.get("subestadoproyecto")
@@ -324,7 +373,10 @@ def calcular_variables(df: pd.DataFrame, cfg: ConfigModelo) -> pd.DataFrame:
     out["cobertura_declarada"] = [
         min(_div(b, p), 1.0) for b, p in zip(out["totalbeneficiario"], out["poblacion_municipal"])
     ]
-    out["beneficiarios_directos"] = out["cobertura_declarada"]
+    # Cero beneficiarios declarados es ficha sin diligenciar, no impacto nulo.
+    out["beneficiarios_directos"] = out["cobertura_declarada"].where(
+        out["totalbeneficiario"] > 0
+    )
     out["excede_poblacion"] = out["totalbeneficiario"] > out["poblacion_municipal"]
     out["prioridad_sectorial"] = out["sector"].map(
         lambda v: mapear(v, m["prioridad_sectorial"])
@@ -334,23 +386,33 @@ def calcular_variables(df: pd.DataFrame, cfg: ConfigModelo) -> pd.DataFrame:
     ]
 
     # --- gobernanza -------------------------------------------------------
+    # Metadato de calidad del dato. Se calcula y se muestra, pero no entra
+    # al score (peso 0 en pesos.yaml, por exigencia de la direccion).
     out["completitud_ficha"] = out["completitud_ficha_v"]
     # Cobertura del reporte: proporcion de los anios del horizonte declarado
     # en los que el proyecto efectivamente reporto apropiacion. Reemplaza a
-    # 'presencia_cruzada', que resulto constante.
+    # 'presencia_cruzada', que resulto constante. Sin horizonte legible el
+    # dato es faltante, no cero.
     anios = out["horizonte"].map(_anios_horizonte)
     out["anios_horizonte"] = anios
     out["cobertura_reporte"] = [
-        min(_div(v, a, defecto=0.0), 1.0) if a > 0 else 0.0
+        min(_div(v, a, defecto=0.0), 1.0) if a > 0 else np.nan
         for v, a in zip(out["n_vigencias_apropiadas"], anios)
     ]
+    # Conducta de reporte de la entidad (si registra avance en el SUIFP).
+    # Es un atributo de gobernanza del proyecto, no de la disponibilidad del
+    # dato en esta plataforma, por eso se mantiene en el score.
     out["reporta_seguimiento"] = (out["avancefisico"] > 0).astype(float)
     # Consistencia: que el valor reportado en la ficha coincida con la suma
-    # de la ejecucion anual. 1 = coherente, 0 = discrepancia total.
+    # de la ejecucion anual. 1 = coherente, 0 = discrepancia total. Con la
+    # ficha financiera vacia no hay con que comparar: es faltante.
     out["consistencia_financiera"] = [
         1.0 - min(abs(a - b) / max(a, b), 1.0) if max(a, b) > 0 else 0.0
         for a, b in zip(out["valorvigenteproyecto"], out["valor_vigente_total"])
     ]
+    out["consistencia_financiera"] = out["consistencia_financiera"].where(
+        ~out["dato_ficha_financiera_vacia"]
+    )
 
     # --- atractivo inversor -----------------------------------------------
     out["escala_proyecto"] = np.log1p(out["valor_vigente_total"].clip(lower=0))
@@ -360,12 +422,47 @@ def calcular_variables(df: pd.DataFrame, cfg: ConfigModelo) -> pd.DataFrame:
     out["cofinanciacion_externa"] = [
         _div(e, v) for e, v in zip(out["valor_fuente_externa"], out["valor_vigente_total"])
     ]
+    # Si el proyecto admite capital privado segun su tipo de intervencion:
+    # una obra fisica se puede cofinanciar; un programa de funcionamiento no.
+    out["tipo_intervencion"] = out["nombreproyecto"].map(clasificar_intervencion)
+    out["vinculacion_privada"] = out["tipo_intervencion"].map(
+        lambda v: mapear(v, m["vinculacion_privada"])
+    )
 
     # --- atributos descriptivos, fuera del score ---------------------------
-    out["tipo_intervencion"] = out["nombreproyecto"].map(clasificar_intervencion)
     out["beneficiarios_declarados"] = out["totalbeneficiario"]
+    out["estado"] = estado_legible(estado_fuente)
+    out["grupo_universo"], out["situacion"] = clasificar_vigencia(
+        out["estado"], out["avancefisico"], out["avance_fisico"], cfg)
 
     return out
+
+
+def estado_legible(serie: pd.Series) -> pd.Series:
+    """Quita el espacio duro y el sufijo: 'Inactivo (PGN, Territorio)' -> 'Inactivo'."""
+    return (serie.astype(str).str.replace("\xa0", " ")
+            .str.replace(r"\s*\(PGN, Territorio\)", "", regex=True)
+            .str.split().str.join(" "))
+
+
+def clasificar_vigencia(estado: pd.Series, avance_reportado: pd.Series,
+                        avance_valido: pd.Series, cfg: ConfigModelo):
+    """Separa oportunidades vigentes de proyectos previos.
+
+    Un proyecto previo NO es un proyecto completado: de los inactivos del
+    corte 2026-09-11 solo 12 de 319 reportan el 100 % de avance. Por eso la
+    situacion se informa tal como la reporta el SUIFP.
+    """
+    previos = {sin_tildes(s).lower() for s in cfg.universo["subestados_previos"]}
+    es_previo = estado.map(lambda s: sin_tildes(s).lower() in previos)
+    grupo = np.where(es_previo, "Previo", "Vigente")
+    umbral = cfg.universo["avance_terminado"]
+    situacion = np.select(
+        [avance_valido.isna(), avance_reportado >= umbral, avance_reportado > 0],
+        ["Sin dato valido de avance", "Terminado", "Avance parcial"],
+        default="Sin avance reportado",
+    )
+    return pd.Series(grupo, index=estado.index), pd.Series(situacion, index=estado.index)
 
 
 def variables_requeridas(cfg: ConfigModelo) -> List[str]:

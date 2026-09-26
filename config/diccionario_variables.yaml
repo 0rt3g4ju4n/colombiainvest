@@ -1,0 +1,148 @@
+# Diccionario de variables del indice compuesto.
+# Solo texto: definiciones, fuente y lectura. Los pesos NO van aqui, viven en
+# pesos.yaml. Este archivo alimenta la seccion Metodologia del tablero, el
+# instrumento del panel de expertos y el Anexo A.4 del documento.
+# Cada definicion debe coincidir con el calculo de
+# src/colombiainvest/procesamiento/variables.py.
+
+dimensiones:
+  viabilidad_financiera:
+    nombre: "Viabilidad financiera"
+    pregunta: "El proyecto tiene respaldo presupuestal real y lo esta ejecutando?"
+  madurez_ejecucion:
+    nombre: "Madurez de ejecucion"
+    pregunta: "Que tan avanzado y estable esta el proyecto?"
+  impacto_social:
+    nombre: "Impacto social"
+    pregunta: "A cuanta poblacion llega y en que sectores?"
+  gobernanza:
+    nombre: "Gobernanza"
+    pregunta: "El proyecto reporta su seguimiento de forma regular?"
+  atractivo_inversor:
+    nombre: "Atractivo inversor"
+    pregunta: "Tiene atributos que interesan a un inversionista privado?"
+
+variables:
+  ratio_obligacion:
+    dimension: viabilidad_financiera
+    nombre: "Obligacion sobre apropiacion"
+    definicion: "Proporcion de la apropiacion vigente acumulada que ya esta obligada."
+    fuente: "SUIFP, ejecucion presupuestal (valor obligado / valor vigente)"
+    lectura: "Mas es mejor"
+  ratio_pago:
+    dimension: viabilidad_financiera
+    nombre: "Pago sobre obligacion"
+    definicion: "Proporcion de lo obligado que ya fue pagado, con tope en 1."
+    fuente: "SUIFP, ejecucion presupuestal (valor pagado / valor obligado)"
+    lectura: "Mas es mejor"
+  continuidad_presupuestal:
+    dimension: viabilidad_financiera
+    nombre: "Continuidad presupuestal"
+    definicion: "Numero de vigencias (anos) en las que el proyecto recibio apropiacion."
+    fuente: "SUIFP, ejecucion presupuestal"
+    lectura: "Mas es mejor"
+  diversificacion_fuentes:
+    dimension: viabilidad_financiera
+    nombre: "Diversificacion de fuentes"
+    definicion: "Numero de fuentes de financiacion distintas del proyecto."
+    fuente: "SUIFP, ejecucion presupuestal"
+    lectura: "Mas es mejor"
+    fuera_del_score: "retirada por redundancia: Spearman 0,924 con cofinanciacion externa"
+  brecha_fisico_financiero:
+    dimension: viabilidad_financiera
+    nombre: "Brecha fisico financiera"
+    definicion: "Diferencia absoluta, en puntos, entre el avance fisico y el avance financiero reportados."
+    fuente: "SUIFP, seguimiento"
+    lectura: "Menos es mejor"
+  avance_fisico:
+    dimension: madurez_ejecucion
+    nombre: "Avance fisico"
+    definicion: "Porcentaje de avance fisico reportado en el seguimiento."
+    fuente: "SUIFP, seguimiento"
+    lectura: "Mas es mejor"
+  estado_proyecto:
+    dimension: madurez_ejecucion
+    nombre: "Estado del proyecto"
+    definicion: "Subestado en el SUIFP (en ejecucion, sin recursos para la vigencia, inactivo), llevado a escala por juicio experto."
+    fuente: "SUIFP, datos basicos"
+    lectura: "Mas es mejor"
+  vigencias_ejecutadas:
+    dimension: madurez_ejecucion
+    nombre: "Vigencias ejecutadas"
+    definicion: "Numero de vigencias con obligaciones registradas."
+    fuente: "SUIFP, ejecucion presupuestal"
+    lectura: "Mas es mejor"
+  estabilidad_apropiacion:
+    dimension: madurez_ejecucion
+    nombre: "Variabilidad de la apropiacion"
+    definicion: "Coeficiente de variacion de la apropiacion entre vigencias."
+    fuente: "SUIFP, ejecucion presupuestal"
+    lectura: "Menos es mejor"
+  beneficiarios_directos:
+    dimension: impacto_social
+    nombre: "Cobertura poblacional"
+    definicion: "Beneficiarios declarados en la formulacion como proporcion de la poblacion del municipio, con tope en 1. Es cifra declarada, no verificada."
+    fuente: "SUIFP, datos basicos; poblacion DANE"
+    lectura: "Mas es mejor"
+  prioridad_sectorial:
+    dimension: impacto_social
+    nombre: "Prioridad social del sector"
+    definicion: "Prioridad social del sector del proyecto, asignada por juicio experto."
+    fuente: "Mapeo de juicio experto (pesos.yaml)"
+    lectura: "Mas es mejor"
+  inversion_relativa:
+    dimension: impacto_social
+    nombre: "Inversion por habitante"
+    definicion: "Apropiacion vigente acumulada dividida por la poblacion del municipio."
+    fuente: "SUIFP, ejecucion presupuestal; poblacion DANE"
+    lectura: "Mas es mejor"
+    fuera_del_score: "retirada por redundancia: Spearman 0,991 con escala del proyecto"
+  completitud_ficha:
+    dimension: gobernanza
+    nombre: "Completitud de la ficha"
+    definicion: "Campos diligenciados de los 14 que se revisan en la ficha del SUIFP. Metadato de calidad del dato: se muestra, pero no entra a la calificacion."
+    fuente: "SUIFP, datos basicos"
+    lectura: "Metadato"
+    fuera_del_score: "metadato de calidad del dato, se muestra en cada proyecto"
+  cobertura_reporte:
+    dimension: gobernanza
+    nombre: "Cobertura del reporte"
+    definicion: "Proporcion de los anos del horizonte declarado en que el proyecto reporto apropiacion."
+    fuente: "SUIFP, ejecucion presupuestal y seguimiento"
+    lectura: "Mas es mejor"
+  reporta_seguimiento:
+    dimension: gobernanza
+    nombre: "Reporta seguimiento"
+    definicion: "Si el proyecto registra avance fisico en el seguimiento del SUIFP (si o no)."
+    fuente: "SUIFP, seguimiento"
+    lectura: "Mas es mejor"
+  consistencia_financiera:
+    dimension: gobernanza
+    nombre: "Consistencia financiera"
+    definicion: "Coincidencia entre el valor vigente de la ficha y la suma de la ejecucion anual. En el corte actual le falta el dato al 39,7 % de los proyectos y la regla de faltantes la descarta."
+    fuente: "SUIFP, datos basicos y ejecucion"
+    lectura: "Mas es mejor"
+  escala_proyecto:
+    dimension: atractivo_inversor
+    nombre: "Escala del proyecto"
+    definicion: "Tamano del proyecto: logaritmo de la apropiacion vigente acumulada."
+    fuente: "SUIFP, ejecucion presupuestal"
+    lectura: "Mas es mejor"
+  sector_financiable:
+    dimension: atractivo_inversor
+    nombre: "Sector financiable"
+    definicion: "Afinidad del sector con mecanismos de vinculacion de capital privado, asignada por juicio experto."
+    fuente: "Mapeo de juicio experto (pesos.yaml)"
+    lectura: "Mas es mejor"
+  cofinanciacion_externa:
+    dimension: atractivo_inversor
+    nombre: "Cofinanciacion externa"
+    definicion: "Proporcion de la apropiacion que proviene de fuentes distintas a los recursos propios del municipio."
+    fuente: "SUIFP, ejecucion presupuestal"
+    lectura: "Mas es mejor"
+  vinculacion_privada:
+    dimension: atractivo_inversor
+    nombre: "Vinculacion de capital privado"
+    definicion: "Que tan viable es vincular capital privado segun el tipo de intervencion (obra fisica, mejoramiento, mantenimiento, preinversion, programa o funcionamiento), clasificado por el verbo que encabeza el nombre del proyecto. Valores por juicio experto, validados por el panel."
+    fuente: "SUIFP, nombre del proyecto; mapeo de juicio experto (pesos.yaml)"
+    lectura: "Mas es mejor"

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import sys
-import unicodedata
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -18,8 +17,9 @@ import pandas as pd  # noqa: E402
 
 from colombiainvest.config import DIR_PROCESADOS, DIR_SALIDAS  # noqa: E402
 from colombiainvest.ingesta.documentos import (  # noqa: E402
-    guardar, parsear_informe_gestion, parsear_proyectos_pdm,
+    PUENTE_SECTOR, guardar, norm, parsear_informe_gestion, parsear_proyectos_pdm,
 )
+from colombiainvest.modelo.validacion import validez_convergente  # noqa: E402
 
 # Los documentos viajan dentro del repositorio para que cualquiera pueda
 # reproducir el resultado sin depender de rutas locales. Si no estuvieran,
@@ -40,36 +40,6 @@ def _ubicar(nombre: str) -> Path | None:
 
 RUTA_PROYECTOS = _ubicar(NOMBRE_PROYECTOS)
 RUTA_INFORME = _ubicar(NOMBRE_INFORME)
-
-
-def norm(s: str) -> str:
-    s = unicodedata.normalize("NFKD", str(s))
-    s = "".join(c for c in s if not unicodedata.combining(c))
-    return " ".join(s.upper().split()).strip(" .")
-
-
-# Puente entre el sector del SUIFP y el nombre del sector en el informe.
-PUENTE_SECTOR = {
-    "AMBIENTE Y DESARROLLO SOSTENIBLE": "AMBIENTE Y DESARROLLO SOSTENIBLE",
-    "VIVIENDA, CIUDAD Y TERRITORIO": "VIVIENDA CIUDAD Y TERRITORIO",
-    "MINAS Y ENERGIA": "MINAS Y ENERGIA",
-    "INCLUSION SOCIAL Y RECONCILIACION": "INCLUSION SOCIAL",
-    "EDUCACION": "EDUCACION",
-    "SALUD Y PROTECCION SOCIAL": "SALUD Y PROTECCION SOCIAL",
-    "CULTURA": "CULTURA",
-    "DEPORTE Y RECREACION": "DEPORTE",
-    "COMERCIO, INDUSTRIA Y TURISMO": "COMERCIO INDUSTRIA Y TURISMO",
-    "TRABAJO": "TRABAJO",
-    "CIENCIA, TECNOLOGIA E INNOVACION": "CIENCIA TECNOLOGIA E INNOVACION",
-    "AGRICULTURA Y DESARROLLO RURAL": "AGRICULTURA Y DESARROLLO RURAL",
-    "TRANSPORTE": "TRANSPORTE",
-    "GOBIERNO TERRITORIAL": "GOBIERNO TERRITORIAL",
-    "INFORMACION ESTADISTICA": "INFORMACION ESTADISTICA",
-    "TECNOLOGIAS DE LA INFORMACION Y LAS COMUNICACIONES":
-        "TECNOLOGIA DE LA INFORMACION Y LA COMUNICACION",
-    "JUSTICIA Y DEL DERECHO": "JUSTICIA Y DEL DERECHO",
-    "ORGANISMOS DE CONTROL": "ORGANISMOS DE CONTROL",
-}
 
 
 def main() -> int:
@@ -169,6 +139,24 @@ def main() -> int:
 
     print("\n  Tabla por sector (base temporal distinta, leer como contexto):")
     print(contraste.round(1).to_string(index=False))
+
+    # ------------------------------------------------- validez convergente
+    ruta_calif = DIR_SALIDAS / "proyectos_calificados.parquet"
+    if ruta_calif.exists():
+        calificados = pd.read_parquet(ruta_calif)
+        pruebas, por_sector = validez_convergente(calificados, sectores)
+        pruebas.to_csv(DIR_SALIDAS / "validez_convergente.csv", index=False, encoding="utf-8-sig")
+        por_sector.to_csv(DIR_SALIDAS / "validez_convergente_sectores.csv", index=False,
+                          encoding="utf-8-sig")
+        print("\n=== VALIDEZ CONVERGENTE (proyectos vigentes de Cajica, por sector) ===")
+        print("Fuente independiente: Informe de Gestion 2024 del municipio.")
+        print(pruebas.to_string(index=False))
+        todos, _ = validez_convergente(calificados, sectores, grupo=None)
+        print("\n  Con todos los proyectos de Cajica, vigentes y previos:")
+        print(todos.to_string(index=False))
+    else:
+        print("\nSin salidas/proyectos_calificados.parquet: ejecute 03_score.py para la "
+              "validez convergente.")
 
     print(f"\nSalidas escritas en {DIR_SALIDAS}")
     return 0

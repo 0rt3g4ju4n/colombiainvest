@@ -28,18 +28,23 @@ Ver `docs/diagnostico_fuentes.md` para la evidencia completa.
 ## Estructura
 
 ```
-config/          pesos.yaml y fuentes.yaml. Toda la parametrizacion vive aqui.
+config/          pesos.yaml, fuentes.yaml y diccionario_variables.yaml.
+                 Toda la parametrizacion vive aqui. pesos_panel.yaml lo
+                 escribe el panel de expertos cuando existe.
 src/colombiainvest/
   ingesta/       cliente Socrata y descarga del SUIFP
   procesamiento/ construccion del dataset, variables y normalizacion
-  modelo/        score compuesto y analisis de sensibilidad
-scripts/         01_ingesta, 02_dataset, 03_score, 04_documentos
+  modelo/        score compuesto, sensibilidad, multivariado y AHP
+scripts/         01_ingesta, 02_dataset, 03_score, 04_documentos,
+                 05_panel_expertos
 app/             prototipo en Streamlit (tablero.py y estilos.py)
 tests/           pruebas del modelo
 datos/documentos PDF municipales, versionados
+datos/entrevistas plantillas y respuestas del panel (codigos, sin nombres)
 datos/           crudos y procesados (derivados, no versionados)
 salidas/         ranking, sensibilidad y diagnosticos (derivados)
-docs/            diagnostico de fuentes y notas metodologicas
+docs/            diagnostico de fuentes, decisiones metodologicas e
+                 instrumento del panel de expertos
 main.py          punto de entrada unico
 .vscode/         configuracion de F5
 ```
@@ -107,23 +112,32 @@ python scripts/01_ingesta.py      # descarga el SUIFP (--secop agrega SECOP)
 python scripts/02_dataset.py      # construye el dataset y diagnostica variables
 python scripts/03_score.py        # califica y corre el analisis de sensibilidad
 python scripts/04_documentos.py   # procesa los PDF municipales
+python scripts/05_panel_expertos.py --plantilla   # plantillas del panel
+python scripts/05_panel_expertos.py               # pesos del panel (AHP)
 python -m streamlit run app/tablero.py
 python -m pytest tests/ -q
 ```
 
 ## El modelo
 
-Score compuesto ponderado, no aprendizaje supervisado. No hay variable
-objetivo ni fase de entrenamiento. Los pesos provienen de juicio experto y
-seran validados con entrevistas.
+Indice compuesto, no aprendizaje supervisado. No hay variable objetivo ni
+fase de entrenamiento. La construccion sigue el manual de indicadores
+compuestos de la OCDE y el JRC (2008), segun la especificacion de la
+evaluacion de direccion. Las decisiones, con su evidencia, estan en
+`docs/decisiones_metodologicas.md`.
+
+Entre dimensiones la agregacion es una **media geometrica ponderada**, que
+limita la compensacion: una gobernanza muy baja no se compensa del todo con
+un impacto alto. Pesos preliminares del esquema base:
 
 ```
-Score = 0.25 Viabilidad financiera
-      + 0.20 Madurez de ejecucion
-      + 0.25 Impacto social
-      + 0.20 Gobernanza
-      + 0.10 Atractivo inversor
+Viabilidad financiera 0.25 | Madurez de ejecucion 0.20 | Impacto social 0.25
+Gobernanza 0.20            | Atractivo inversor 0.10
 ```
+
+Son un punto de partida. Los pesos definitivos los produce el panel de
+expertos por proceso analitico jerarquico (`scripts/05_panel_expertos.py`,
+instrumento en `docs/instrumento_panel_expertos.docx`).
 
 Los pesos **no estan incrustados en el codigo**. Viven en `config/pesos.yaml`
 y son el insumo que se lleva a las entrevistas. Existe una prueba
@@ -133,11 +147,24 @@ Cada dimension agrega variables normalizadas a `[0, 1]` y orientadas de modo
 que un valor mayor siempre sea mejor. Los pesos intra dimension tambien son
 configurables.
 
+Datos faltantes: un cero del SUIFP se trata como faltante solo si es
+imposible o si otra tabla del SUIFP lo contradice. Se descarta la variable
+con mas del 30 % de faltantes y no se califica el proyecto con mas del 40 %.
+Si a un proyecto le falta una variable, su dimension se calcula con las
+demas. La completitud de la ficha se muestra como metadato y no entra al
+score.
+
 ### Universo
 
 De 643 proyectos BPIN cuya entidad responsable es la alcaldia de Chia o de
 Cajica, **491 tienen apropiacion presupuestal mayor que cero** y conforman el
 universo evaluable. El recorte es explicito y se reporta.
+
+El score se calcula sobre los 491, que dan una base de comparacion amplia.
+El tablero muestra como oportunidades los **172 vigentes** (en ejecucion o
+sin recursos para la vigencia) y lleva los **319 inactivos** a la seccion
+Proyectos previos, con la situacion que reporta el SUIFP: inactivo no
+significa terminado (solo 12 reportan el 100 % de avance).
 
 ### Normalizacion
 
@@ -150,15 +177,19 @@ encima de un billon de pesos, con maximo de 2.582 billones frente a una
 mediana de 24,6 millones. Sin winsorizar, min-max comprime el 99,9 % de los
 registros contra cero.
 
-### Analisis de sensibilidad
+### Analisis de sensibilidad y robustez
 
-Dos ejercicios, en `src/colombiainvest/modelo/sensibilidad.py`:
+En `src/colombiainvest/modelo/sensibilidad.py` y `multivariado.py`:
 
-1. **Comparacion entre esquemas declarados.** Recalcula el score con pesos
-   iguales y con tres esquemas de enfasis, y reporta correlacion de Spearman
-   y Kendall, desplazamiento de posiciones y estabilidad del top-k.
-2. **Perturbacion Monte Carlo.** Perturba los pesos con ruido relativo y mide
-   la distribucion de la posicion de cada proyecto.
+1. **Esquemas de ponderacion.** Pesos iguales, tres esquemas de enfasis y
+   ponderacion por entropia. Criterio de aceptacion: Spearman mayor que 0,85.
+2. **Decisiones metodologicas.** Agregacion aritmetica, winsorizacion p1 y
+   p99, imputacion por mediana y normalizacion por rango percentil.
+3. **Monte Carlo con Dirichlet.** 10.000 esquemas de pesos centrados en el
+   base; intervalo de posiciones de cada proyecto e indices de sensibilidad
+   de primer orden por dimension.
+4. **Analisis multivariado.** Correlaciones, pares redundantes, componentes
+   principales y alfa de Cronbach por dimension.
 
 Tambien se reporta la **contribucion de cada dimension a la varianza del
 score**, para detectar pesos decorativos.

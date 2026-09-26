@@ -50,17 +50,22 @@ def winsorizar(s: pd.Series, p_inf: float, p_sup: float) -> pd.Series:
     return s.clip(lower=lo, upper=hi)
 
 
+def _constante(s: pd.Series) -> pd.Series:
+    """Variable sin varianza: 0.5 a todos, respetando los faltantes."""
+    return pd.Series(np.where(s.notna(), 0.5, np.nan), index=s.index)
+
+
 def _minmax(s: pd.Series) -> pd.Series:
     lo, hi = s.min(), s.max()
     if not np.isfinite(lo) or not np.isfinite(hi) or hi == lo:
-        return pd.Series(np.full(len(s), 0.5), index=s.index)
+        return _constante(s)
     return (s - lo) / (hi - lo)
 
 
 def _zscore(s: pd.Series) -> pd.Series:
     mu, sd = s.mean(), s.std(ddof=0)
     if sd == 0 or not np.isfinite(sd):
-        return pd.Series(np.full(len(s), 0.5), index=s.index)
+        return _constante(s)
     z = (s - mu) / sd
     # se reescala a [0,1] con un recorte a +-3 sigma para poder ponderar
     return ((z.clip(-3, 3) + 3) / 6)
@@ -98,14 +103,18 @@ def normalizar_variable(
     nombre: str = "",
     imputacion: str = "mediana",
 ) -> pd.Series:
-    """Devuelve la variable en [0, 1] donde 1 siempre es mejor."""
-    x = pd.to_numeric(s, errors="coerce")
+    """Devuelve la variable en [0, 1] donde 1 siempre es mejor.
+
+    imputacion: 'mediana' o 'cero' rellenan los faltantes; 'ninguna' los
+    conserva como NaN para que la dimension se repondere con las variables
+    disponibles (tratamiento por defecto del modelo).
+    """
+    x = pd.to_numeric(s, errors="coerce").replace([np.inf, -np.inf], np.nan)
 
     if imputacion == "mediana":
         x = x.fillna(x.median())
     elif imputacion == "cero":
         x = x.fillna(0.0)
-    x = x.replace([np.inf, -np.inf], np.nan).fillna(x.median() if imputacion == "mediana" else 0.0)
 
     if log_montos and nombre in VARIABLES_MONETARIAS:
         x = np.log1p(x.clip(lower=0))
@@ -132,6 +141,8 @@ def normalizar_bloque(
     p_sup = float(config_norm["percentil_superior"])
     log_montos = bool(config_norm["log_montos"])
     imputacion = str(config_norm.get("imputacion_faltantes", "mediana"))
+    if imputacion == "reponderar":
+        imputacion = "ninguna"
 
     salida = pd.DataFrame(index=df.index)
     diagnostico: Dict[str, Dict[str, float]] = {}
@@ -157,3 +168,32 @@ def normalizar_bloque(
         }
     return salida, diagnostico
 
+
+
+def regla_faltantes(
+    df: pd.DataFrame,
+    variables: list[str],
+    max_por_variable: float,
+    max_por_proyecto: float,
+) -> Tuple[list[str], pd.Series, pd.Series]:
+    """Regla de exclusion por faltantes de la especificacion de direccion.
+
+    Devuelve (variables descartadas, proporcion de faltantes por proyecto,
+    mascara de proyectos con informacion insuficiente). La proporcion por
+    proyecto se calcula sobre las variables que sobreviven, porque una
+    variable descartada ya no es exigible a ningun proyecto.
+    """
+    presentes = [v for v in variables if v in df.columns]
+    datos = df[presentes].apply(pd.to_numeric, errors="coerce")
+    datos = datos.replace([np.inf, -np.inf], np.nan)
+    por_variable = datos.isna().mean()
+    descartadas = sorted(por_variable[por_variable > max_por_variable].index)
+    vigentes = [v for v in presentes if v not in descartadas]
+    if vigentes:
+        por_proyecto = datos[vigentes].isna().mean(axis=1)
+    else:
+        por_proyecto = pd.Series(1.0, index=df.index)
+    insuficiente = por_proyecto > max_por_proyecto
+    if descartadas:
+        log.warning("Variables descartadas por faltantes: %s", descartadas)
+    return descartadas, por_proyecto, insuficiente

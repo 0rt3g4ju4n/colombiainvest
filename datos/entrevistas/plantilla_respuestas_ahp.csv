@@ -1,0 +1,11 @@
+﻿comparacion;experto;perfil;fecha;dimension_a;dimension_b;preferida;intensidad
+1;E01;;;viabilidad_financiera;madurez_ejecucion;;
+2;E01;;;viabilidad_financiera;impacto_social;;
+3;E01;;;viabilidad_financiera;gobernanza;;
+4;E01;;;viabilidad_financiera;atractivo_inversor;;
+5;E01;;;madurez_ejecucion;impacto_social;;
+6;E01;;;madurez_ejecucion;gobernanza;;
+7;E01;;;madurez_ejecucion;atractivo_inversor;;
+8;E01;;;impacto_social;gobernanza;;
+9;E01;;;impacto_social;atractivo_inversor;;
+10;E01;;;gobernanza;atractivo_inversor;;

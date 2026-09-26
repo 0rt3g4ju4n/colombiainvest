@@ -25,11 +25,18 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 
-from colombiainvest.config import DIMENSIONES, DIR_PROCESADOS, cargar_modelo  # noqa: E402
-from colombiainvest.modelo.score import aplicar_esquema, calcular_dimensiones  # noqa: E402
-from colombiainvest.modelo.sensibilidad import (  # noqa: E402
-    comparar_esquemas, contribucion_dimensiones,
+import yaml  # noqa: E402
+
+from colombiainvest.config import DIMENSIONES, DIR_CONFIG, DIR_PROCESADOS, cargar_modelo  # noqa: E402
+from colombiainvest.modelo.multivariado import analisis_multivariado  # noqa: E402
+from colombiainvest.modelo.score import (  # noqa: E402
+    aplicar_esquema, aportes_por_variable, calcular_dimensiones, evaluar_faltantes,
+    percentil_en_grupo,
 )
+from colombiainvest.modelo.sensibilidad import (  # noqa: E402
+    comparar_esquemas, comparar_variantes, contribucion_dimensiones, perturbacion_montecarlo,
+)
+from colombiainvest.modelo.validacion import validez_convergente  # noqa: E402
 from estilos import (  # noqa: E402
     CSS, OCULTAR_LATERAL, barra_peso, color_score, moneda, numero,
 )
@@ -52,6 +59,7 @@ ETIQUETAS_LARGAS = {
 SECCIONES = [
     "Quienes somos",
     "Proyectos",
+    "Proyectos previos",
     "Comparar",
     "Indicadores",
     "Contexto municipal",
@@ -85,9 +93,50 @@ def cargar_cfg():
 
 
 @st.cache_data
+def cargar_diccionario() -> dict:
+    with open(DIR_CONFIG / "diccionario_variables.yaml", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+
+
+@st.cache_data
+def cargar_universo() -> dict | None:
+    ruta = DIR_PROCESADOS / "universo.json"
+    if not ruta.exists():
+        return None
+    with open(ruta, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@st.cache_data
+def separar_calificables(_cfg, n: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Los proyectos con informacion insuficiente no reciben score."""
+    datos = cargar_datos()
+    insuf = evaluar_faltantes(datos, _cfg)["insuficiente"]
+    return (datos[~insuf].reset_index(drop=True), datos[insuf].reset_index(drop=True))
+
+
+@st.cache_data
 def puntajes_dimension(_cfg, n: int) -> pd.DataFrame:
-    puntajes, _ = calcular_dimensiones(cargar_datos(), _cfg)
-    return puntajes[DIMENSIONES]
+    calificables, _ = separar_calificables(_cfg, n)
+    puntajes, _ = calcular_dimensiones(calificables, _cfg)
+    return puntajes
+
+
+@st.cache_data
+def sensibilidad_completa(_cfg, n: int) -> dict:
+    """Se calcula una vez por sesion: tarda unos segundos con 10.000 simulaciones."""
+    calificables, _ = separar_calificables(_cfg, n)
+    metricas, _ = comparar_esquemas(calificables, _cfg)
+    variantes = comparar_variantes(cargar_datos(), _cfg)
+    vig = calificables["grupo_universo"] == "Vigente"
+    esq_vig, _ = comparar_esquemas(calificables, _cfg, subconjunto=vig)
+    var_vig = comparar_variantes(cargar_datos(), _cfg, bpins=set(calificables.loc[vig, "bpin"]))
+    resumen, por_proyecto, primer = perturbacion_montecarlo(calificables, _cfg)
+    mv = analisis_multivariado(calificables, _cfg)
+    return {"esquemas": metricas, "variantes": variantes, "mc": resumen,
+            "esquemas_vigentes": esq_vig, "variantes_vigentes": var_vig,
+            "mc_proyectos": por_proyecto, "primer_orden": primer, "multivariado": mv,
+            "contribucion": contribucion_dimensiones(calificables, _cfg)}
 
 
 @st.cache_data
@@ -100,8 +149,12 @@ def contexto_cajica() -> pd.DataFrame | None:
 
 
 cfg = cargar_cfg()
-df = cargar_datos()
-puntajes = puntajes_dimension(cfg, len(df))
+dicc = cargar_diccionario()
+df, insuficientes = separar_calificables(cfg, len(cargar_datos()))
+todos_puntajes = puntajes_dimension(cfg, len(cargar_datos()))
+puntajes = todos_puntajes[DIMENSIONES]
+aportes = aportes_por_variable(todos_puntajes, cfg)
+N_VARIABLES = sum(1 for c in todos_puntajes.columns if "__" in c)
 
 # ---------------------------------------------------------------------------
 # Encabezado y navegacion
@@ -129,7 +182,10 @@ with st.container(key="cinav"):
 # Ponderacion. La barra lateral solo existe donde hay algo que filtrar o
 # ponderar; en las secciones de lectura se oculta por completo.
 # ---------------------------------------------------------------------------
-CON_LATERAL = ("Proyectos", "Comparar", "Indicadores")
+CON_LATERAL = ("Proyectos", "Proyectos previos", "Comparar", "Indicadores")
+# El score se calcula sobre todos los evaluables; cada seccion muestra su grupo.
+GRUPO_POR_SECCION = {"Proyectos": "Vigente", "Comparar": "Vigente",
+                     "Proyectos previos": "Previo"}
 
 if seccion not in CON_LATERAL:
     st.markdown(OCULTAR_LATERAL, unsafe_allow_html=True)
@@ -172,9 +228,19 @@ else:
 base = df.copy()
 for d in DIMENSIONES:
     base[f"p_{d}"] = puntajes[d].round(1)
-base["score"] = aplicar_esquema(puntajes, esquema).round(1)
+base = pd.concat([base, aportes.add_prefix("a_")], axis=1)
+base["score"] = aplicar_esquema(puntajes, esquema, cfg.agregacion).round(1)
 base["ranking"] = base["score"].rank(ascending=False, method="min").astype(int)
+# Puesto y percentil se leen dentro del grupo que se muestra: un proyecto
+# vigente se compara con los vigentes, uno previo con los previos.
+base["puesto"] = base.groupby("grupo_universo")["score"].rank(
+    ascending=False, method="min").astype(int)
+base["total_grupo"] = base.groupby("grupo_universo")["bpin"].transform("size")
+base["percentil_sector"] = percentil_en_grupo(
+    base["score"], base["grupo_universo"] + "|" + base["sector"])
 base = base.sort_values("score", ascending=False).reset_index(drop=True)
+grupo_seccion = GRUPO_POR_SECCION.get(seccion)
+conjunto = base[base["grupo_universo"] == grupo_seccion] if grupo_seccion else base
 
 
 # ---------------------------------------------------------------------------
@@ -199,10 +265,13 @@ def facetas(col: str, etiqueta: str, datos: pd.DataFrame) -> list[str]:
 
 
 if seccion in CON_LATERAL:
-    sel_mun = facetas("municipio", "Municipio", base)
-    sel_sec = facetas("sector", "Sector", base)
-    if "tipo_intervencion" in base.columns:
-        sel_tipo = facetas("tipo_intervencion", "Tipo de intervencion", base)
+    col_estado, tit_estado = (("situacion", "Situacion del proyecto")
+                              if grupo_seccion == "Previo" else ("estado", "Estado del proyecto"))
+    sel_mun = facetas("municipio", "Municipio", conjunto)
+    sel_est = facetas(col_estado, tit_estado, conjunto)
+    sel_sec = facetas("sector", "Sector", conjunto)
+    if "tipo_intervencion" in conjunto.columns:
+        sel_tipo = facetas("tipo_intervencion", "Tipo de intervencion", conjunto)
     else:
         sel_tipo = []
 
@@ -211,21 +280,23 @@ if seccion in CON_LATERAL:
     rango_score = st.sidebar.slider("Score", 0, 100, (0, 100), 5,
                                     label_visibility="collapsed")
 
-    vista = base[base["score"].between(*rango_score)]
+    vista = conjunto[conjunto["score"].between(*rango_score)]
     if sel_mun:
         vista = vista[vista["municipio"].isin(sel_mun)]
+    if sel_est:
+        vista = vista[vista[col_estado].isin(sel_est)]
     if sel_sec:
         vista = vista[vista["sector"].isin(sel_sec)]
     if sel_tipo:
         vista = vista[vista["tipo_intervencion"].isin(sel_tipo)]
 else:
-    sel_mun = sel_sec = sel_tipo = []
+    sel_mun = sel_est = sel_sec = sel_tipo = []
     rango_score = (0, 100)
-    vista = base
+    vista = conjunto
 
 
 def chips() -> None:
-    aplicados = list(sel_mun) + list(sel_sec) + list(sel_tipo)
+    aplicados = list(sel_mun) + list(sel_est) + list(sel_sec) + list(sel_tipo)
     if rango_score != (0, 100):
         aplicados.append(f"Score {rango_score[0]} a {rango_score[1]}")
     if aplicados:
@@ -247,6 +318,16 @@ def tarjeta(fila: pd.Series) -> str:
     benef = fila.get("beneficiarios_declarados", 0) or 0
     tipo = fila.get("tipo_intervencion", "")
     nombre = str(fila["nombreproyecto"])[:105]
+    # Avance sin dato cuando el seguimiento contradice la ejecucion. Se trunca
+    # y no se redondea: 99,6 % no debe mostrarse como 100 % (terminado).
+    avance = ("<b>sin dato valido</b> de avance fisico"
+              if pd.isna(fila.get("avance_fisico"))
+              else f"<b>{int(fila['avancefisico'])}%</b> de avance fisico")
+    campos = int(round(fila.get("completitud_ficha", 0) * 14))
+    previo = fila.get("grupo_universo") == "Previo"
+    estado = (f"proyecto previo &middot; <b>{fila['situacion']}</b>" if previo
+              else fila["estado"])
+    grupo = "previos" if previo else "vigentes"
     return f"""
     <div class="ci-card">
       <div class="ci-card-top">
@@ -260,88 +341,18 @@ def tarjeta(fila: pd.Series) -> str:
       <div class="ci-precio-nota">apropiacion vigente acumulada</div>
       <div class="ci-datos">
         <b>{numero(benef)}</b> beneficiarios declarados<br>
-        <b>{fila['avancefisico']:.0f}%</b> de avance fisico &middot;
-        puesto <b>{fila['ranking']}</b> de {len(base)}
+        {avance} &middot;
+        puesto <b>{fila['puesto']}</b> de {fila['total_grupo']} {grupo}<br>
+        percentil <b>{fila['percentil_sector']:.0f}</b> en su sector &middot;
+        {estado}
       </div>
+      <div class="ci-precio-nota">Ficha SUIFP: {campos} de 14 campos diligenciados</div>
       <div class="ci-barras">{barras}</div>
     </div>"""
 
 
-# ===========================================================================
-# QUIENES SOMOS
-# ===========================================================================
-if seccion == "Quienes somos":
-    st.markdown(
-        '<div class="ci-hero"><h1>Existe oferta de datos publicos.<br>'
-        "No existe oferta de analitica aplicada a la inversion publica "
-        "territorial.</h1>"
-        "<p>ColombiaInvest evalua, califica y compara proyectos de inversion "
-        "publica de Chia y Cajica, para reducir la asimetria de informacion "
-        "entre las entidades territoriales que estructuran los proyectos y el "
-        "capital privado que podria financiarlos.</p></div>",
-        unsafe_allow_html=True,
-    )
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Proyectos calificados", numero(len(base)))
-    c2.metric("Municipios", "2")
-    c3.metric("Dimensiones de evaluacion", "5")
-    c4.metric("Variables del modelo", "19")
-
-    st.markdown("### El problema")
-    a, b = st.columns(2)
-    with a:
-        st.markdown(
-            '<div class="ci-panel"><h3>Para el inversionista privado</h3>'
-            "<p>Revisar diez proyectos de Chia exige descargar informacion de "
-            "tres fuentes distintas, construir por cuenta propia un criterio de "
-            "comparacion y aplicarlo a mano. No hay calificacion, no hay "
-            "ranking, no hay comparabilidad. El costo de busqueda y evaluacion "
-            "es tan alto que el capital termina en alternativas ya "
-            "consolidadas.</p></div>",
-            unsafe_allow_html=True,
-        )
-    with b:
-        st.markdown(
-            '<div class="ci-panel"><h3>Para la entidad territorial</h3>'
-            "<p>El municipio no sabe como se califican sus proyectos ni en que "
-            "dimensiones falla su estructuracion. Cajica cerro 2024 con 92,5 % "
-            "de avance fisico y 58,1 % de ejecucion presupuestal: una senal "
-            "clara que hoy ninguna plataforma publica interpreta.</p></div>",
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("### Que hace la plataforma")
-    cols = st.columns(5)
-    textos = [
-        ("Viabilidad financiera", "Si el proyecto tiene respaldo presupuestal real."),
-        ("Madurez de ejecucion", "Que tan avanzado y estable esta."),
-        ("Impacto social", "A cuantos beneficia y en que sectores."),
-        ("Gobernanza", "Que tan confiable es la informacion del proyecto."),
-        ("Atractivo inversor", "Senales de interes privado potencial."),
-    ]
-    for col, (tit, txt) in zip(cols, textos):
-        col.markdown(f'<div class="ci-panel"><h3>{tit}</h3><p>{txt}</p></div>',
-                     unsafe_allow_html=True)
-
-    st.markdown(
-        '<p class="ci-nota">Fuente: Sistema Unificado de Inversion y Finanzas '
-        "Publicas del Departamento Nacional de Planeacion, con informacion "
-        "complementaria de los municipios de Chia y Cajica.</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p class="ci-nota">La calificacion es un instrumento de analisis. '
-        "No es una recomendacion de inversion ni una certificacion de riesgo, "
-        "y la plataforma no interviene en la captacion, custodia ni "
-        "canalizacion de recursos.</p>",
-        unsafe_allow_html=True,
-    )
-
-# ===========================================================================
-# PROYECTOS
-# ===========================================================================
-elif seccion == "Proyectos":
+def listado(vista: pd.DataFrame, archivo: str) -> None:
+    """Grilla de tarjetas con orden, paginas y descarga."""
     orden = {
         "Mayor calificacion": ("score", False),
         "Menor calificacion": ("score", True),
@@ -389,7 +400,7 @@ elif seccion == "Proyectos":
 
         st.divider()
         with st.expander("Ver como tabla y descargar"):
-            cols = (["ranking", "bpin", "municipio", "sector", "score"]
+            cols = (["puesto", "bpin", "municipio", "sector", "score"]
                     + [f"p_{d}" for d in DIMENSIONES]
                     + ["nombreproyecto", "valor_vigente_total", "beneficiarios_declarados"])
             cols = [c for c in cols if c in vista.columns]
@@ -410,8 +421,103 @@ elif seccion == "Proyectos":
             )
             st.download_button(
                 "Descargar CSV", tabla.to_csv(index=False).encode("utf-8-sig"),
-                file_name="proyectos_colombiainvest.csv", mime="text/csv",
+                file_name=archivo, mime="text/csv",
             )
+
+
+# ===========================================================================
+# QUIENES SOMOS
+# ===========================================================================
+if seccion == "Quienes somos":
+    st.markdown(
+        '<div class="ci-hero"><h1>Existe oferta de datos publicos.<br>'
+        "No existe oferta de analitica aplicada a la inversion publica "
+        "territorial.</h1>"
+        "<p>ColombiaInvest evalua, califica y compara proyectos de inversion "
+        "publica de Chia y Cajica, para reducir la asimetria de informacion "
+        "entre las entidades territoriales que estructuran los proyectos y el "
+        "capital privado que podria financiarlos.</p></div>",
+        unsafe_allow_html=True,
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Proyectos vigentes", numero((base["grupo_universo"] == "Vigente").sum()))
+    c2.metric("Proyectos previos", numero((base["grupo_universo"] == "Previo").sum()))
+    c3.metric("Dimensiones de evaluacion", "5")
+    c4.metric("Variables del modelo", str(N_VARIABLES))
+
+    st.markdown("### El problema")
+    a, b = st.columns(2)
+    with a:
+        st.markdown(
+            '<div class="ci-panel"><h3>Para el inversionista privado</h3>'
+            "<p>Revisar diez proyectos de Chia exige descargar informacion de "
+            "tres fuentes distintas, construir por cuenta propia un criterio de "
+            "comparacion y aplicarlo a mano. No hay calificacion, no hay "
+            "ranking, no hay comparabilidad. El costo de busqueda y evaluacion "
+            "es tan alto que el capital termina en alternativas ya "
+            "consolidadas.</p></div>",
+            unsafe_allow_html=True,
+        )
+    with b:
+        st.markdown(
+            '<div class="ci-panel"><h3>Para la entidad territorial</h3>'
+            "<p>El municipio no sabe como se califican sus proyectos ni en que "
+            "dimensiones falla su estructuracion. Cajica cerro 2024 con 92,5 % "
+            "de avance fisico y 58,1 % de ejecucion presupuestal: una senal "
+            "clara que hoy ninguna plataforma publica interpreta.</p></div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Que hace la plataforma")
+    cols = st.columns(5)
+    textos = [
+        ("Viabilidad financiera", "Si el proyecto tiene respaldo presupuestal real."),
+        ("Madurez de ejecucion", "Que tan avanzado y estable esta."),
+        ("Impacto social", "A cuantos beneficia y en que sectores."),
+        ("Gobernanza", "Si el proyecto reporta su seguimiento de forma regular."),
+        ("Atractivo inversor", "Senales de interes privado potencial."),
+    ]
+    for col, (tit, txt) in zip(cols, textos):
+        col.markdown(f'<div class="ci-panel"><h3>{tit}</h3><p>{txt}</p></div>',
+                     unsafe_allow_html=True)
+
+    st.markdown(
+        '<p class="ci-nota">Fuente: Sistema Unificado de Inversion y Finanzas '
+        "Publicas del Departamento Nacional de Planeacion, con informacion "
+        "complementaria de los municipios de Chia y Cajica.</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="ci-nota">La calificacion es un instrumento de analisis. '
+        "No es una recomendacion de inversion ni una certificacion de riesgo, "
+        "y la plataforma no interviene en la captacion, custodia ni "
+        "canalizacion de recursos.</p>",
+        unsafe_allow_html=True,
+    )
+
+# ===========================================================================
+# PROYECTOS
+# ===========================================================================
+elif seccion == "Proyectos":
+    st.markdown('<p class="ci-nota">Proyectos vigentes: en ejecucion o sin recursos '
+                "para la vigencia actual. Los proyectos inactivos de planes "
+                "anteriores estan en la seccion Proyectos previos.</p>",
+                unsafe_allow_html=True)
+    listado(vista, "proyectos_vigentes_colombiainvest.csv")
+
+# ===========================================================================
+# PROYECTOS PREVIOS
+# ===========================================================================
+elif seccion == "Proyectos previos":
+    st.markdown(
+        '<p class="ci-nota">Proyectos con subestado inactivo en el SUIFP, en su '
+        "mayoria de planes de desarrollo anteriores. Se muestran como historial y "
+        "no como oportunidades de inversion. Inactivo no significa terminado: cada "
+        "tarjeta indica la situacion que reporta el SUIFP (terminado, avance "
+        "parcial, sin avance reportado o sin dato valido).</p>",
+        unsafe_allow_html=True)
+    listado(vista, "proyectos_previos_colombiainvest.csv")
 
 # ===========================================================================
 # COMPARAR
@@ -451,23 +557,53 @@ elif seccion == "Comparar":
             filas = {
                 "Score": [f"{r['score']:.1f}" for _, r in comp.iterrows()],
                 "Puesto": [f"{r['ranking']} de {len(base)}" for _, r in comp.iterrows()],
+                "Percentil en su sector": [f"{r['percentil_sector']:.0f}" for _, r in comp.iterrows()],
                 "Municipio": list(comp["municipio"]),
                 "Sector": list(comp["sector"]),
+                "Estado del proyecto": list(comp["estado"]),
+                "Ficha SUIFP diligenciada": [f"{round(r['completitud_ficha'] * 14):.0f} de 14 campos"
+                                             for _, r in comp.iterrows()],
                 "Apropiacion vigente": [moneda(r["valor_vigente_total"]) for _, r in comp.iterrows()],
                 "Ejecutado (pagado)": [moneda(r["valor_pagado_total"]) for _, r in comp.iterrows()],
                 "Beneficiarios declarados": [numero(r.get("beneficiarios_declarados", 0)) for _, r in comp.iterrows()],
-                "Avance fisico": [f"{r['avancefisico']:.1f} %" for _, r in comp.iterrows()],
+                "Avance fisico": ["sin dato valido" if pd.isna(r["avance_fisico"])
+                                  else f"{r['avancefisico']:.1f} %" for _, r in comp.iterrows()],
                 "Vigencias con apropiacion": [numero(r["n_vigencias_apropiadas"]) for _, r in comp.iterrows()],
                 "Fuentes de financiacion": [numero(r["n_fuentes"]) for _, r in comp.iterrows()],
             }
             st.dataframe(pd.DataFrame(filas, index=list(comp["bpin"])).T,
                          use_container_width=True)
 
+            st.markdown("#### De donde sale cada puntaje")
+            st.caption(
+                "Puntos que aporta cada variable al puntaje de su dimension. Los "
+                "aportes de una dimension suman su puntaje. 'sin dato' indica que "
+                "la variable falta para ese proyecto y la dimension se calculo "
+                "con las demas."
+            )
+            desglose = []
+            for d in DIMENSIONES:
+                cols = [c for c in comp.columns if c.startswith(f"a_{d}__")]
+                for c in cols:
+                    var = c.split("__", 1)[1]
+                    desglose.append({
+                        "dimension": ETIQUETAS_LARGAS[d],
+                        "variable": dicc["variables"].get(var, {}).get("nombre", var),
+                        **{b: ("sin dato" if pd.isna(v) else f"{v:.1f}")
+                           for b, v in zip(comp["bpin"], comp[c])},
+                    })
+                desglose.append({"dimension": ETIQUETAS_LARGAS[d], "variable": "Puntaje de la dimension",
+                                 **{b: f"{v:.1f}" for b, v in zip(comp["bpin"], comp[f"p_{d}"])}})
+            st.dataframe(pd.DataFrame(desglose), hide_index=True, use_container_width=True,
+                         height=min(38 * (len(desglose) + 1), 760))
+
 # ===========================================================================
 # INDICADORES
 # ===========================================================================
 elif seccion == "Indicadores":
     st.subheader("Indicadores por dimension")
+    st.caption("Incluye proyectos vigentes y previos: es el diagnostico del territorio. "
+               "Use el filtro Estado del proyecto para separarlos.")
     chips()
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Proyectos", numero(len(vista)))
@@ -610,15 +746,25 @@ elif seccion == "Contexto municipal":
 # ===========================================================================
 elif seccion == "Metodologia":
     st.subheader("Como se construye la calificacion")
+    agr = cfg.agregacion
     st.markdown(
-        "El modelo es una **calificacion compuesta ponderada**, no un modelo de "
-        "aprendizaje supervisado. No hay variable objetivo ni fase de "
-        "entrenamiento: los pesos provienen de juicio experto y se validaran "
-        "con entrevistas a profesionales en gestion de proyectos."
+        "La calificacion es un **indice compuesto**, no un modelo de aprendizaje "
+        "supervisado: no existe una variable objetivo observable de exito de la "
+        "inversion contra la cual entrenar o medir exactitud. Su construccion "
+        "sigue las etapas del manual de indicadores compuestos de la OCDE y el "
+        "Centro Comun de Investigacion (2008). Los pesos entre dimensiones son "
+        "preliminares y los define un panel de expertos por proceso analitico "
+        "jerarquico."
     )
-    st.latex(
-        r"Score = \sum_{d=1}^{5} w_d \cdot P_d, \qquad \sum_{d=1}^{5} w_d = 1"
-    )
+    if agr["metodo"] == "geometrica":
+        st.latex(r"S = \frac{\prod_{d=1}^{5} \left(p + (100-p)\,\frac{P_d}{100}\right)^{w_d} - p}"
+                 r"{100 - p}\cdot 100, \qquad \sum_d w_d = 1,\; p = " + f"{agr['piso']:g}")
+        st.markdown(
+            '<p class="ci-nota">Media geometrica ponderada: una dimension muy baja '
+            "no se compensa del todo con otra muy alta. El piso p evita que un solo "
+            "cero anule el puntaje completo.</p>", unsafe_allow_html=True)
+    else:
+        st.latex(r"S = \sum_{d=1}^{5} w_d \cdot P_d, \qquad \sum_{d=1}^{5} w_d = 1")
 
     st.markdown("#### Pesos aplicados")
     st.markdown(
@@ -627,38 +773,169 @@ elif seccion == "Metodologia":
         unsafe_allow_html=True,
     )
 
-    st.markdown("#### Contribucion de cada dimension a la varianza del score")
-    st.caption("Si una dimension aporta poca varianza, su peso es decorativo. "
-               "Este diagnostico ya obligo a corregir tres variables.")
-    st.dataframe(contribucion_dimensiones(df, cfg).round(4),
-                 hide_index=True, use_container_width=True)
+    # -------------------------------------------------------------- universo
+    st.markdown("#### Universo de datos")
+    uni = cargar_universo()
+    if uni:
+        st.markdown(
+            f"Fecha de corte **{uni['corte']['fecha_corte']}** "
+            f"({uni['corte']['origen']}). **{uni['identificados']}** proyectos BPIN "
+            f"identificados; **{uni['evaluables']}** evaluables "
+            f"({uni['regla_evaluable']}). El score se calcula sobre los "
+            f"{uni['evaluables']} evaluables, que dan una base de comparacion mas "
+            f"amplia; la vista de oportunidades muestra los **{uni.get('vigentes', '')}** "
+            f"vigentes y los **{uni.get('previos', '')}** inactivos quedan en Proyectos previos."
+        )
+        if uni.get("situacion_previos"):
+            st.caption("Situacion de los proyectos previos segun el SUIFP: " + "; ".join(
+                f"{k} {v}" for k, v in uni["situacion_previos"].items()) + ".")
+        filas_u = []
+        for mun, d in uni["por_municipio"].items():
+            filas_u.append({
+                "municipio": mun, "evaluables": d["evaluables"],
+                "ficha completa (14 de 14)": d["ficha_completa"],
+                "ficha financiera vacia": d["ficha_financiera_vacia"],
+                "seguimiento contradictorio": d["seguimiento_contradictorio"],
+                "informacion insuficiente": d["informacion_insuficiente"],
+                **{f"estado: {k}": v for k, v in d["subestado"].items()},
+            })
+        st.dataframe(pd.DataFrame(filas_u).fillna(0), hide_index=True, use_container_width=True)
 
-    st.markdown("#### Estabilidad del ranking frente a la ponderacion")
-    st.caption(
-        "Recalcula el score bajo esquemas alternativos y mide cuanto cambia el "
-        "orden. Correlaciones de Spearman cercanas a 1 indican que el ranking "
-        "no depende del juicio experto particular que se haya elegido."
+    st.markdown("#### Datos faltantes")
+    falt = cfg.faltantes
+    descartadas = evaluar_faltantes(cargar_datos(), cfg)["descartadas"]
+    st.markdown(
+        f"- Un cero del SUIFP se trata como dato faltante solo si es imposible (valor "
+        f"total del proyecto en cero) o si otra tabla del propio SUIFP lo contradice "
+        f"(avance financiero en cero con obligaciones registradas).\n"
+        f"- Se descarta toda variable con mas del {falt['max_por_variable']:.0%} de "
+        f"faltantes: **{', '.join(descartadas) if descartadas else 'ninguna'}**.\n"
+        f"- No se califica un proyecto con mas del {falt['max_por_proyecto']:.0%} de "
+        f"variables faltantes; se reporta como '{falt['etiqueta_insuficiente']}': "
+        f"**{len(insuficientes)}** proyectos.\n"
+        f"- Si a un proyecto le falta una variable, su dimension se calcula con las "
+        f"demas, sin inventar el dato.\n"
+        f"- La completitud de la ficha se muestra en cada proyecto como metadato y no "
+        f"entra a la calificacion."
     )
-    with st.spinner("Recalculando..."):
-        metricas, _ = comparar_esquemas(df, cfg)
+
+    st.markdown("#### Diccionario de variables")
+    filas_d = []
+    for d in DIMENSIONES:
+        for var, spec in cfg.variables(d).items():
+            info = dicc["variables"].get(var, {})
+            estado = (info.get("fuera_del_score", "fuera del score") if spec["peso"] == 0
+                      else "descartada por faltantes" if var in descartadas else "activa")
+            filas_d.append({"dimension": ETIQUETAS_LARGAS[d], "variable": info.get("nombre", var),
+                            "definicion": info.get("definicion", ""), "fuente": info.get("fuente", ""),
+                            "lectura": info.get("lectura", ""), "peso en la dimension": spec["peso"],
+                            "estado": estado})
+    st.dataframe(pd.DataFrame(filas_d), hide_index=True, use_container_width=True, height=420)
+
+    with st.spinner("Calculando sensibilidad, 10.000 simulaciones..."):
+        sens = sensibilidad_completa(cfg, len(cargar_datos()))
+    umbral = cfg.montecarlo["umbral_spearman"]
+
+    st.markdown("#### Analisis multivariado")
+    mv = sens["multivariado"]
+    st.caption("Verifica si las dimensiones tienen sustento empirico y detecta variables "
+               "redundantes. Es un diagnostico: no modifica el score.")
+    a, b = st.columns(2)
+    with a:
+        st.markdown("**Pares redundantes** (Spearman de 0,8 o mas)")
+        st.dataframe(mv["redundantes"], hide_index=True, use_container_width=True)
+        st.markdown("**Alfa de Cronbach por dimension**")
+        st.dataframe(mv["cronbach"], hide_index=True, use_container_width=True)
+    with b:
+        st.markdown("**Componentes principales**")
+        st.dataframe(mv["pca_varianza"].head(8), hide_index=True, use_container_width=True)
+
+    st.markdown("#### Contribucion de cada dimension a la varianza del score")
+    st.dataframe(sens["contribucion"].round(4), hide_index=True, use_container_width=True)
+
+    st.markdown(f"#### Robustez del ranking (criterio: Spearman mayor que {umbral})")
+    st.caption("Compara el ranking del esquema base con esquemas alternativos de "
+               "ponderacion y con otras decisiones metodologicas.")
     st.dataframe(
-        metricas[["esquema", "spearman", "kendall_tau", "desplaz_medio",
-                  "desplaz_max", "top10_estable", "top20_estable"]].round(4),
-        hide_index=True, use_container_width=True,
+        sens["esquemas"][["esquema", "spearman", "kendall_tau", "cumple_umbral", "desplaz_medio",
+                          "desplaz_max", "top10_estable", "top20_estable"]].round(4),
+        hide_index=True, use_container_width=True)
+    st.dataframe(
+        sens["variantes"][["variante", "spearman", "cumple_umbral", "desplaz_medio",
+                           "desplaz_max", "top10_estable", "top20_estable"]].round(4),
+        hide_index=True, use_container_width=True)
+
+    st.markdown(f"**Dentro de los proyectos vigentes** (lo que ve el inversionista)")
+    st.dataframe(
+        pd.concat([
+            sens["esquemas_vigentes"][["esquema", "spearman", "cumple_umbral",
+                                        "top10_estable", "top20_estable"]],
+            sens["variantes_vigentes"].rename(columns={"variante": "esquema"})[
+                ["esquema", "spearman", "cumple_umbral", "top10_estable", "top20_estable"]],
+        ]).round(4), hide_index=True, use_container_width=True)
+
+    st.markdown("#### Validez convergente")
+    ctx_informe = contexto_cajica()
+    if ctx_informe is not None:
+        pruebas, por_sector = validez_convergente(
+            base, ctx_informe, columnas={f"p_{d}": f"puntaje_{d}" for d in DIMENSIONES})
+        st.caption(
+            "Contraste con una fuente independiente: el Informe de Gestion 2024 de "
+            "Cajica, que produce el municipio y no el DNP. Unidad: el sector. Se "
+            "compara el puntaje medio de los proyectos vigentes de Cajica en cada "
+            "sector con el avance y la ejecucion que el informe reporta para ese "
+            "sector. Criterio: correlacion positiva y significativa. Limitaciones: un "
+            "solo municipio, pocos sectores, y el informe mide la vigencia 2024 "
+            "mientras el SUIFP acumula todo el horizonte.")
+        st.dataframe(pruebas, hide_index=True, use_container_width=True)
+    else:
+        st.markdown('<p class="ci-nota">Requiere procesar los documentos municipales '
+                    "(scripts/04_documentos.py).</p>", unsafe_allow_html=True)
+
+    st.markdown("#### Incertidumbre sobre los pesos")
+    mc = sens["mc"].iloc[0]
+    st.markdown(
+        f"Monte Carlo con **{numero(mc['n_simulaciones'])}** esquemas de pesos tomados de "
+        f"una distribucion de {mc['distribucion'].capitalize()} ({mc['parametro']}) centrada "
+        f"en el esquema base. Spearman medio **{mc['spearman_medio']:.3f}**, percentil 5 "
+        f"**{mc['spearman_p05']:.3f}**; el {mc['pct_sobre_umbral']:.0%} de las simulaciones "
+        f"supera el criterio. Desplazamiento medio: {mc['desplaz_medio_abs']:.1f} puestos."
     )
-    for _, r in metricas.iterrows():
-        st.caption(f"**{r['esquema']}**: {r['descripcion']}")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Indices de sensibilidad de primer orden**")
+        st.caption("Que parte del cambio del ranking explica la incertidumbre de cada peso.")
+        st.dataframe(sens["primer_orden"], hide_index=True, use_container_width=True)
+    with c2:
+        st.markdown("**Intervalo de posiciones del top 10**")
+        st.dataframe(sens["mc_proyectos"].head(10)[["rank_base", "bpin", "rank_p05", "rank_p95"]],
+                     hide_index=True, use_container_width=True)
 
     st.markdown("#### Limitaciones declaradas")
+    n_excede = int(base["excede_poblacion"].sum()) if "excede_poblacion" in base else 0
     st.markdown(
-        "- Los beneficiarios son cifra declarada en la formulacion MGA, no "
-        "verificada. 188 de los 491 proyectos declaran mas beneficiarios que "
-        "habitantes tiene el municipio, por lo que se usan como cobertura "
+        f"- Los beneficiarios son cifra declarada en la formulacion MGA, no "
+        f"verificada. {n_excede} de los {len(base)} proyectos declaran mas beneficiarios "
+        "que habitantes tiene el municipio, por lo que se usan como cobertura "
         "poblacional con tope y no como conteo.\n"
+        "- Con dos municipios no se puede hablar de municipios comparables: Chia y "
+        "Cajica son el caso de aplicacion del prototipo.\n"
+        "- Gobernanza e impacto social quedan con dos variables cada una: la regla "
+        "de faltantes descarto la consistencia financiera (39,7 % sin dato) y el "
+        "analisis multivariado retiro la inversion por habitante, casi identica a "
+        "la escala del proyecto (Spearman 0,991). En impacto social, cobertura y "
+        "prioridad del sector van en sentido opuesto (Spearman -0,30): la dimension "
+        "reune dos aspectos distintos y no una medida unica.\n"
+        "- La vinculacion de capital privado se basa en el tipo de intervencion, que "
+        "se infiere del verbo que encabeza el nombre del proyecto; su escala es juicio "
+        "experto preliminar que valida el panel. Con el peso actual del atractivo "
+        "inversor (0,10) su efecto en el orden es moderado.\n"
         "- Los documentos municipales cubren 79 de 491 proyectos y ninguno de "
         "Chia, por lo que no alimentan el score.\n"
         "- No existe llave comun entre proyecto y contrato de SECOP. El cruce "
         "por texto esta pendiente.\n"
+        "- El indice mide lo que las fuentes permiten medir, no necesariamente lo "
+        "que determina el exito de un proyecto.\n"
         "- La poblacion municipal usada esta pendiente de verificar contra "
         "TerriData."
     )
