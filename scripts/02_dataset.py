@@ -39,7 +39,7 @@ def fecha_corte() -> dict:
     ruta = DIR_CRUDOS / "corte.json"
     if ruta.exists():
         with open(ruta, encoding="utf-8") as f:
-            return {**json.load(f), "origen": "registrada en la ingesta"}
+            return {"origen": "registrada en la ingesta", **json.load(f)}
     archivos = list(DIR_CRUDOS.glob("*.json"))
     fecha = max(datetime.fromtimestamp(p.stat().st_mtime) for p in archivos) if archivos else None
     return {"fecha_corte": fecha.strftime("%Y-%m-%d") if fecha else None,

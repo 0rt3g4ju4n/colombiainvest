@@ -1,0 +1,14 @@
+{
+  "fecha_corte": "2026-09-11",
+  "fuente": "SUIFP, DNP, via datos.gov.co",
+  "registros": {
+    "beneficiarios": 641,
+    "datos_basicos": 643,
+    "ejecucion": 2029,
+    "localizacion": 643,
+    "seguimiento": 643,
+    "universo_bpin": 643
+  },
+  "nota": "Corte versionado para que las cifras del documento se reproduzcan exactamente. main.py --reconstruir descarga un corte nuevo.",
+  "origen": "corte versionado en el repositorio"
+}

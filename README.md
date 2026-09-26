@@ -1,6 +1,6 @@
 # ColombiaInvest
 
-**Version 1.0**
+**Version 1.1**
 
 Componente de datos y prototipo del trabajo de grado, Maestria en Ciencia de
 Datos, Universidad EAN, modalidad Creacion de Empresa.
@@ -61,7 +61,7 @@ Hay tres configuraciones en el menu de depuracion:
 | Configuracion | Que hace |
 |---|---|
 | ColombiaInvest: abrir el tablero | instala lo que falte, construye los datos si es la primera vez y abre el navegador |
-| ColombiaInvest: reconstruir los datos | rehace los datos desde las fuentes, sin abrir el tablero |
+| ColombiaInvest: reconstruir los datos | descarga un corte nuevo del SUIFP y rehace los datos, sin abrir el tablero |
 | ColombiaInvest: pruebas | corre la bateria de pruebas |
 
 ### Opcion 2: consola
@@ -79,9 +79,8 @@ Doble clic sobre `ejecutar.bat`.
 `main.py` hace tres cosas en orden, y avisa en pantalla de cada una:
 
 1. Verifica las dependencias e instala las que falten desde `requirements.txt`.
-2. Construye los datos si no existen. **Solo la primera vez**, toma unos dos
-   minutos y **requiere conexion a internet**, porque descarga el SUIFP del
-   DNP desde `datos.gov.co`.
+2. Construye los datos si no existen, desde el corte versionado del SUIFP.
+   **Solo la primera vez**, toma unos segundos y no requiere internet.
 3. Levanta el servidor en `http://localhost:8501` y abre el navegador.
 
 Para detenerlo, `Ctrl+C` en la consola.
@@ -89,7 +88,7 @@ Para detenerlo, `Ctrl+C` en la consola.
 Opciones:
 
 ```bash
-python main.py --reconstruir    # rehace los datos desde cero
+python main.py --reconstruir    # descarga un corte nuevo del SUIFP y rehace todo
 python main.py --solo-datos     # construye los datos y no abre el tablero
 python main.py --puerto 8600    # usa otro puerto
 python main.py --sin-instalar   # no instala nada, solo avisa que falta
@@ -98,9 +97,15 @@ python main.py --sin-instalar   # no instala nada, solo avisa que falta
 ### Que se versiona y que no
 
 Los datos derivados (`datos/crudos/`, `datos/procesados/`, `salidas/`) **no
-se versionan**: se reconstruyen solos. Lo que si viaja en el repositorio es
-`datos/documentos/`, con los dos PDF municipales que permiten reproducir la
-seccion de contexto sin depender de rutas locales.
+se versionan**: se reconstruyen solos. Lo que si viaja en el repositorio es:
+
+- `datos/corte_2026-09-11/`: el corte del SUIFP con el que se escribio el
+  documento. `main.py` construye los datos desde aqui, sin internet, y las
+  cifras coinciden exactamente con las citadas. El SUIFP se actualiza todo el
+  tiempo (el 25 de septiembre ya daba 494 evaluables en lugar de 491), asi que
+  `python main.py --reconstruir` descarga un corte nuevo a proposito.
+- `datos/documentos/`: los dos PDF municipales de la seccion de contexto.
+- `datos/entrevistas/`: plantillas del panel de expertos.
 
 Quien reciba el proyecto en ZIP o lo clone obtiene exactamente el mismo
 resultado corriendo `main.py`.

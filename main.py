@@ -7,12 +7,14 @@ Ejecutar con F5 en Visual Studio Code, o desde la consola:
 
 Hace tres cosas, en orden:
   1. Verifica que las dependencias esten instaladas.
-  2. Construye los datos si faltan (descarga el SUIFP del DNP y procesa
-     los documentos municipales). Solo la primera vez.
+  2. Construye los datos si faltan, a partir del corte versionado del SUIFP
+     (datos/corte_2026-09-11) y de los documentos municipales. Asi las
+     cifras coinciden con las del documento del trabajo de grado.
   3. Levanta el servidor del tablero y abre el navegador.
 
 Opciones:
-    python main.py --reconstruir   fuerza rehacer los datos desde cero
+    python main.py --reconstruir   descarga un corte NUEVO del SUIFP y rehace
+                                   todo (las cifras cambian con la fecha)
     python main.py --solo-datos    construye los datos y no abre el tablero
     python main.py --puerto 8600   usa otro puerto
 """
@@ -35,6 +37,12 @@ APP = RAIZ / "app" / "tablero.py"
 SCRIPTS = RAIZ / "scripts"
 MARCA_DATOS = RAIZ / "datos" / "procesados" / "proyectos_evaluables.parquet"
 MARCA_DOCS = RAIZ / "datos" / "procesados" / "informe_gestion_cajica_2024.json"
+DIR_CRUDOS = RAIZ / "datos" / "crudos"
+# Corte del SUIFP con el que se escribio el documento. El SUIFP se actualiza
+# continuamente: entre el 11 y el 25 de septiembre de 2026 los proyectos
+# evaluables pasaron de 491 a 494. Versionar el corte hace reproducibles las
+# cifras citadas; --reconstruir descarga uno nuevo a proposito.
+CORTE_VERSIONADO = RAIZ / "datos" / "corte_2026-09-11"
 
 PUERTO_POR_DEFECTO = 8501
 
@@ -136,10 +144,19 @@ def preparar_datos(reconstruir: bool) -> None:
                 print("El tablero funciona igual, sin la seccion de contexto.")
         return
 
-    aviso("Construyendo los datos. Solo ocurre la primera vez.\n"
-          "Requiere conexion a internet: se descarga el SUIFP del DNP\n"
-          "desde datos.gov.co. Toma alrededor de dos minutos.")
-    ejecutar_script("01_ingesta.py")
+    if not reconstruir and CORTE_VERSIONADO.exists():
+        aviso(f"Construyendo los datos desde el corte versionado "
+              f"{CORTE_VERSIONADO.name}.\nNo requiere internet. Toma unos segundos.")
+        import shutil
+        DIR_CRUDOS.mkdir(parents=True, exist_ok=True)
+        for archivo in CORTE_VERSIONADO.glob("*.json"):
+            shutil.copy2(archivo, DIR_CRUDOS / archivo.name)
+    else:
+        aviso("Descargando un corte NUEVO del SUIFP desde datos.gov.co.\n"
+              "Requiere conexion a internet y toma alrededor de dos minutos.\n"
+              "Las cifras pueden diferir de las del documento, que usa el\n"
+              "corte del 11 de septiembre de 2026.")
+        ejecutar_script("01_ingesta.py")
     ejecutar_script("02_dataset.py")
     ejecutar_script("03_score.py")
     try:

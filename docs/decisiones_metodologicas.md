@@ -2,7 +2,7 @@
 
 Versión del modelo 0.2.0. Corte de datos: 2026-09-11 (SUIFP, DNP, vía datos.gov.co).
 
-La evaluación de dirección (hallazgo crítico C5) señaló que el componente de ciencia de datos se anunciaba sin especificarse, y la versión 3 ajustada del anteproyecto escribió esa especificación siguiendo el manual de indicadores compuestos de la OCDE y el JRC (2008). Este documento registra, punto por punto, qué se adoptó, qué se adaptó y qué se descartó, con la evidencia de los datos del caso. Todas las cifras se reproducen con `python main.py --reconstruir` o con los scripts 02 a 04.
+La evaluación de dirección (hallazgo crítico C5) señaló que el componente de ciencia de datos se anunciaba sin especificarse, y la versión 3 ajustada del anteproyecto escribió esa especificación siguiendo el manual de indicadores compuestos de la OCDE y el JRC (2008). Este documento registra, punto por punto, qué se adoptó, qué se adaptó y qué se descartó, con la evidencia de los datos del caso. Todas las cifras se reproducen con `python main.py`, que construye los datos desde el corte versionado en `datos/corte_2026-09-11`. El SUIFP se actualiza continuamente: un corte descargado el 25 de septiembre de 2026 (`python main.py --reconstruir`) da 638 proyectos identificados, 494 evaluables y 176 vigentes, por lo que toda cifra debe citarse con su fecha de corte.
 
 ## 1. Universo de datos (condición de aprobación 2)
 
